@@ -53,8 +53,6 @@ const sendSingleRequest = async (requestBody, controller) => {
 };
 
 export const sendMessageToAI = async (message, modelId, messageHistory = []) => {
-  let lastError = null;
-  
   try {
     // 检查参数
     if (!message || !modelId) {
@@ -131,7 +129,6 @@ export const sendMessageToAI = async (message, modelId, messageHistory = []) => 
           throw error;
         }
       } catch (error) {
-        lastError = error;
         console.error(`第 ${attempt + 1} 次请求失败:`, error);
 
         if (attempt === RETRY_COUNT) {

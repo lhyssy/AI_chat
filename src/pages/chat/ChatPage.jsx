@@ -92,7 +92,7 @@ const HistoryItem = React.memo(({ item, onSelect, onExport, onShare }) => (
 ));
 
 // 提取加载指示器组件
-const LoadingIndicator = React.memo(() => (
+const LoadingIndicator = React.memo(({ modelName }) => (
   <div className="flex items-center justify-center text-gray-500 my-6">
     <div className="relative">
       <div className="w-12 h-12 rounded-full border-2 border-purple-600 border-t-transparent animate-spin"></div>
@@ -105,7 +105,7 @@ const LoadingIndicator = React.memo(() => (
         AI 正在思考中...
       </span>
       <span className="text-xs text-gray-500 mt-1">
-        使用模型: {selectedModel?.name}
+        使用模型: {modelName}
       </span>
     </div>
   </div>
@@ -304,7 +304,7 @@ const ChatPage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [inputMessage, selectedFile, messages, selectedModel, chatHistory]);
+  }, [inputMessage, selectedFile, messages, selectedModel, chatHistory, generateTitle]);
 
   const handleModelChange = useCallback((e) => {
     const model = AVAILABLE_MODELS.find(m => m.id === e.target.value);
@@ -561,7 +561,7 @@ const ChatPage = () => {
                   />
                 ))}
                 {isLoading && (
-                  <LoadingIndicator />
+                  <LoadingIndicator modelName={selectedModel.name} />
                 )}
                 <div ref={messagesEndRef} />
               </>
