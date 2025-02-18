@@ -2,8 +2,13 @@ import { API_CONFIG, BILLING_CONFIG } from '../config/api';
 
 // 计算token数量
 const countTokens = (text) => {
+  if (!text || typeof text !== 'string') {
+    return 0;
+  }
   // 简单估算:中文字符按2个token,英文和数字按1个token
-  const chineseCount = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+  const chineseRegex = /[\u4e00-\u9fa5]/g;
+  const chineseMatches = text.match(chineseRegex);
+  const chineseCount = chineseMatches ? chineseMatches.length : 0;
   const otherCount = text.length - chineseCount;
   return chineseCount * 2 + otherCount;
 };
@@ -21,6 +26,11 @@ const calculateCost = (modelId, inputTokens, outputTokens) => {
 
 // 查询账户余额
 export const getBalance = async () => {
+  // 开发环境下返回测试数据
+  if (process.env.NODE_ENV === 'development') {
+    return 10000; // 返回 10000 元测试余额
+  }
+
   try {
     const response = await fetch(`${API_CONFIG.BASE_URL}/billing/balance`, {
       headers: {
@@ -39,6 +49,19 @@ export const getBalance = async () => {
 
 // 查询使用统计
 export const getUsageStats = async (startDate, endDate) => {
+  // 开发环境下返回测试数据
+  if (process.env.NODE_ENV === 'development') {
+    return {
+      totalCost: 50,
+      conversationCount: 100,
+      modelUsage: {
+        'gpt-3.5-turbo': 5000,
+        'gpt-4': 2000,
+        'claude-2': 1000
+      }
+    };
+  }
+
   try {
     const response = await fetch(
       `${API_CONFIG.BASE_URL}/billing/usage?start=${startDate}&end=${endDate}`,
@@ -98,17 +121,24 @@ export const checkOrderStatus = async (orderId) => {
 };
 
 // 计算本次对话费用
-export const calculateMessageCost = (modelId, message, response) => {
+export const calculateMessageCost = (message, model) => {
+  if (!message || !model) return 0;
+  
   const inputTokens = countTokens(message);
-  const outputTokens = countTokens(response);
-  return calculateCost(modelId, inputTokens, outputTokens);
+  // 预估输出token数为输入的1.5倍
+  const estimatedOutputTokens = Math.ceil(inputTokens * 1.5);
+  return calculateCost(model.id, inputTokens, estimatedOutputTokens);
 };
 
 // 检查余额是否足够
-export const checkBalanceSufficient = async (modelId, estimatedTokens) => {
+export const checkBalanceSufficient = async (estimatedCost) => {
+  // 开发环境下始终返回 true
+  if (process.env.NODE_ENV === 'development') {
+    return true;
+  }
+
   try {
     const balance = await getBalance();
-    const estimatedCost = calculateCost(modelId, estimatedTokens, estimatedTokens * 2);
     return balance >= estimatedCost;
   } catch (error) {
     console.error('检查余额错误:', error);

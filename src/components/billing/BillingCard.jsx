@@ -1,7 +1,20 @@
 import React from 'react';
 import { BILLING_CONFIG } from '../../config/api';
 
-const BillingCard = ({ balance, usage, onRecharge }) => {
+const BillingCard = ({ balance = 0, usage = null, onRecharge }) => {
+  // 设置默认值，避免空值
+  const defaultUsage = {
+    totalCost: 0,
+    conversationCount: 0,
+    modelUsage: {}
+  };
+
+  // 合并默认值和实际值
+  const safeUsage = usage ? {
+    ...defaultUsage,
+    ...usage
+  } : defaultUsage;
+
   return (
     <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
       <div className="flex items-center justify-between mb-4">
@@ -26,13 +39,13 @@ const BillingCard = ({ balance, usage, onRecharge }) => {
             <div className="bg-gray-50 rounded-lg p-3">
               <p className="text-xs text-gray-500 mb-1">消费金额</p>
               <p className="text-lg font-semibold text-gray-900">
-                ¥{usage.totalCost.toFixed(2)}
+                ¥{safeUsage.totalCost.toFixed(2)}
               </p>
             </div>
             <div className="bg-gray-50 rounded-lg p-3">
               <p className="text-xs text-gray-500 mb-1">对话次数</p>
               <p className="text-lg font-semibold text-gray-900">
-                {usage.conversationCount}
+                {safeUsage.conversationCount}
               </p>
             </div>
           </div>
@@ -41,7 +54,7 @@ const BillingCard = ({ balance, usage, onRecharge }) => {
         <div>
           <h4 className="text-sm font-medium text-gray-700 mb-2">模型使用明细</h4>
           <div className="space-y-2">
-            {Object.entries(usage.modelUsage).map(([modelId, tokens]) => {
+            {Object.entries(safeUsage.modelUsage).map(([modelId, tokens]) => {
               const model = BILLING_CONFIG[modelId];
               if (!model) return null;
               
