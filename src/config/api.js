@@ -1,5 +1,5 @@
 export const API_CONFIG = {
-  BASE_URL: process.env.REACT_APP_API_BASE_URL,
+  BASE_URL: process.env.REACT_APP_API_BASE_URL || 'https://api.siliconflow.com/v1',
   API_KEY: process.env.REACT_APP_API_KEY
 };
 
@@ -124,4 +124,64 @@ export const EXPORT_FORMATS = {
 export const SHARE_OPTIONS = {
   COPY_LINK: 'copy_link',
   EXPORT_FILE: 'export_file'
-}; 
+};
+
+// 计费配置
+export const BILLING_CONFIG = {
+  // GPT-3.5 模型
+  'gpt-3.5-turbo': {
+    name: 'GPT-3.5',
+    pricePerToken: 0.002, // 每1000 tokens的价格（美元）
+    contextWindow: 4096,
+    inputPrice: 0.0015,   // 输入价格
+    outputPrice: 0.002    // 输出价格
+  },
+  // GPT-4 模型
+  'gpt-4': {
+    name: 'GPT-4',
+    pricePerToken: 0.03,  // 每1000 tokens的价格（美元）
+    contextWindow: 8192,
+    inputPrice: 0.03,     // 输入价格
+    outputPrice: 0.06     // 输出价格
+  },
+  // Claude 模型
+  'claude-2': {
+    name: 'Claude 2',
+    pricePerToken: 0.01,  // 每1000 tokens的价格（美元）
+    contextWindow: 100000,
+    inputPrice: 0.008,    // 输入价格
+    outputPrice: 0.012    // 输出价格
+  }
+};
+
+// 支付方式
+export const PAYMENT_METHODS = {
+  WECHAT: 'wechat',
+  ALIPAY: 'alipay',
+  BANK_CARD: 'bank_card'
+};
+
+// 充值套餐
+export const RECHARGE_PACKAGES = [
+  {
+    id: 'basic',
+    name: '基础套餐',
+    amount: 50,
+    bonus: 0,
+    description: '适合轻度使用者'
+  },
+  {
+    id: 'pro',
+    name: '专业套餐',
+    amount: 200,
+    bonus: 20,
+    description: '赠送20元额度'
+  },
+  {
+    id: 'enterprise',
+    name: '企业套餐',
+    amount: 1000,
+    bonus: 150,
+    description: '赠送150元额度'
+  }
+]; 

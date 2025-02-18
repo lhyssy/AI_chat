@@ -1,0 +1,156 @@
+/* 计费卡片样式 */
+.billing-card {
+  @apply bg-white rounded-lg shadow-sm p-4 mb-4;
+  transition: all 0.3s ease;
+}
+
+.billing-card:hover {
+  @apply shadow-md;
+}
+
+.billing-card .balance {
+  @apply text-2xl font-bold text-purple-600;
+}
+
+.billing-card .usage-stats {
+  @apply mt-4 space-y-2;
+}
+
+.billing-card .model-usage {
+  @apply text-sm text-gray-600;
+}
+
+/* 充值模态框样式 */
+.recharge-modal {
+  @apply fixed inset-0 z-50 flex items-center justify-center;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.recharge-modal .modal-content {
+  @apply bg-white rounded-lg shadow-xl w-full max-w-md p-6;
+  animation: modal-appear 0.3s ease-out;
+}
+
+.recharge-modal .package-grid {
+  @apply grid grid-cols-2 gap-4 mt-4;
+}
+
+.recharge-modal .package-card {
+  @apply border border-gray-200 rounded-lg p-4 cursor-pointer transition-all duration-200;
+}
+
+.recharge-modal .package-card:hover {
+  @apply border-purple-500 shadow-sm;
+}
+
+.recharge-modal .package-card.selected {
+  @apply border-purple-500 bg-purple-50;
+}
+
+.recharge-modal .payment-methods {
+  @apply mt-6 space-y-3;
+}
+
+.recharge-modal .payment-method {
+  @apply flex items-center space-x-3 p-3 border rounded-lg cursor-pointer transition-all duration-200;
+}
+
+.recharge-modal .payment-method:hover {
+  @apply border-purple-500 bg-purple-50;
+}
+
+.recharge-modal .payment-method.selected {
+  @apply border-purple-500 bg-purple-50;
+}
+
+.recharge-modal .payment-method img {
+  @apply w-6 h-6 object-contain;
+}
+
+.recharge-modal .custom-amount {
+  @apply mt-4;
+}
+
+.recharge-modal .custom-amount input {
+  @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-500;
+}
+
+.recharge-modal .confirm-button {
+  @apply mt-6 w-full bg-purple-600 text-white py-3 rounded-lg font-medium transition-all duration-200;
+}
+
+.recharge-modal .confirm-button:hover {
+  @apply bg-purple-700;
+}
+
+.recharge-modal .confirm-button:disabled {
+  @apply bg-gray-400 cursor-not-allowed;
+}
+
+@keyframes modal-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 支付状态指示器 */
+.payment-status {
+  @apply fixed bottom-4 right-4 bg-white rounded-lg shadow-lg p-4 flex items-center space-x-3;
+  animation: slide-up 0.3s ease-out;
+}
+
+.payment-status .spinner {
+  @apply w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin;
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 余额不足提示 */
+.balance-warning {
+  @apply bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4;
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+/* 使用统计图表容器 */
+.usage-chart {
+  @apply mt-4 p-4 bg-gray-50 rounded-lg;
+}
+
+.usage-chart canvas {
+  @apply w-full h-40;
+}
+
+/* 响应式调整 */
+@media (max-width: 640px) {
+  .recharge-modal .package-grid {
+    @apply grid-cols-1;
+  }
+  
+  .recharge-modal .modal-content {
+    @apply mx-4;
+  }
+  
+  .billing-card {
+    @apply mx-4;
+  }
+} 

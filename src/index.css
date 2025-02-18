@@ -371,7 +371,7 @@
 /* 自定义滚动条 */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #9333ea transparent;
+  scrollbar-color: #a855f7 transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -383,8 +383,13 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #9333ea;
+  background-color: #a855f7;
   border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #9333ea;
 }
 
 /* 毛玻璃效果 */
@@ -417,5 +422,84 @@
   100% {
     background-position: 100% 50%;
   }
+}
+
+/* 优化输入框拖拽手柄样式 */
+.resize-handle {
+  position: relative;
+  cursor: ns-resize;
+  height: 12px;
+  padding: 4px 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0,0,0,0.02) 50%,
+    transparent 100%
+  );
+  opacity: 0.7;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.resize-handle:hover,
+.resize-handle.active {
+  opacity: 1;
+  height: 16px;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(168, 85, 247, 0.05) 50%,
+    transparent 100%
+  );
+}
+
+.resize-handle-bar {
+  width: 48px;
+  height: 4px;
+  background-color: #e5e7eb;
+  border-radius: 9999px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.resize-handle:hover .resize-handle-bar {
+  width: 64px;
+  background-color: #a855f7;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.3);
+}
+
+.resize-handle.active .resize-handle-bar {
+  width: 72px;
+  background-color: #7c3aed;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
+}
+
+/* 优化输入框样式 */
+.chat-input {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  border-color: #e5e7eb;
+  background-color: #ffffff;
+  will-change: height;
+}
+
+.chat-input.resize-hover {
+  border-color: #a855f7;
+  box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.1);
+}
+
+.chat-input:focus {
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.15);
+  border-color: #a855f7;
+}
+
+.chat-input.dragging {
+  border-color: #7c3aed;
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.2);
+  cursor: ns-resize;
+}
+
+/* 添加平滑滚动效果 */
+.smooth-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
