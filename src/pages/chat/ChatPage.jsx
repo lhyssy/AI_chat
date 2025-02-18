@@ -115,6 +115,7 @@ const ChatPage = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0]);
   const [streamingContent, setStreamingContent] = useState('');
+  const [error, setError] = useState('');
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const [chatHistory, setChatHistory] = useState([]);
@@ -215,6 +216,7 @@ const ChatPage = () => {
     if (!inputMessage.trim() && !selectedFile) return;
 
     setShowPrompts(false);
+    setError('');
 
     const userMessage = {
       id: Date.now(),
@@ -285,6 +287,7 @@ const ChatPage = () => {
 
     } catch (error) {
       console.error('Error getting AI response:', error);
+      setError(error.message || '请稍后重试');
       const errorMessage = {
         id: Date.now() + 1,
         content: `抱歉，发生了错误：${error.message || '请稍后重试'}`,
@@ -296,7 +299,7 @@ const ChatPage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [inputMessage, selectedFile, messages, selectedModel]);
+  }, [inputMessage, selectedFile, messages, selectedModel, chatHistory]);
 
   const handleModelChange = useCallback((e) => {
     const model = AVAILABLE_MODELS.find(m => m.id === e.target.value);
@@ -421,7 +424,7 @@ const ChatPage = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-gray-50 to-white">
+    <div className="flex flex-col h-screen hardware-accelerated">
       {/* 主内容区域 */}
       <div className="flex-1 flex">
         {/* 左侧边栏 */}
@@ -474,25 +477,29 @@ const ChatPage = () => {
           </div>
 
           {/* 历史对话列表 */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-4 scroll-container custom-scrollbar-optimize">
             <div className="space-y-3">
               {filteredHistoryMemo.map(item => (
-                <HistoryItem
+                <div 
                   key={item.id}
-                  item={item}
-                  onSelect={() => {
-                    const chatData = JSON.parse(localStorage.getItem(`chat_${item.id}`));
-                    if (chatData) {
-                      setMessages(chatData.messages);
-                      setShowPrompts(false);
-                    }
-                  }}
-                  onExport={() => {
-                    setSelectedChat(item);
-                    setShowExportModal(true);
-                  }}
-                  onShare={() => handleShare(item.id)}
-                />
+                  className="message-appear-optimize scroll-item"
+                >
+                  <HistoryItem
+                    item={item}
+                    onSelect={() => {
+                      const chatData = JSON.parse(localStorage.getItem(`chat_${item.id}`));
+                      if (chatData) {
+                        setMessages(chatData.messages);
+                        setShowPrompts(false);
+                      }
+                    }}
+                    onExport={() => {
+                      setSelectedChat(item);
+                      setShowExportModal(true);
+                    }}
+                    onShare={() => handleShare(item.id)}
+                  />
+                </div>
               ))}
             </div>
           </div>
@@ -557,65 +564,66 @@ const ChatPage = () => {
           </div>
 
           {/* 输入区域 */}
-          <div className="border-t border-gray-200 bg-white p-6">
-            <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto">
-              <div className="flex items-end space-x-4">
-                <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-                  <textarea
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    placeholder="随便问点什么..."
-                    rows="3"
-                    className="w-full px-6 py-4 text-base text-gray-700 bg-transparent border-none focus:ring-0 resize-none rounded-t-xl"
-                  />
-                  <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200">
-                    <div className="flex space-x-3">
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="p-2 text-gray-400 hover:text-purple-600 rounded-lg hover:bg-purple-50 transition-all duration-300"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                        </svg>
-                      </button>
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileSelect}
-                        className="hidden"
-                      />
-                      {selectedFile && (
-                        <span className="text-sm text-gray-500 flex items-center">
-                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          已选择: {selectedFile.name}
-                        </span>
-                      )}
-                    </div>
-                    <span className={`text-sm ${
-                      inputMessage.length > 800 ? 'text-orange-500' : 'text-gray-400'
-                    }`}>
-                      {inputMessage.length}/1000
-                    </span>
+          <div className="p-4 border-t border-gray-200 animate-gpu">
+            <div className="flex gap-2">
+              <textarea
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    handleSendMessage(e);
+                  }
+                }}
+                className="flex-1 p-2 border rounded-lg input-optimize"
+                placeholder="输入消息..."
+                rows={1}
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={isLoading || !inputMessage.trim()}
+                className={`px-4 py-2 rounded-lg button-optimize hover-scale-optimize ${
+                  isLoading ? 'bg-gray-400' : 'bg-purple-600'
+                } text-white`}
+              >
+                {isLoading ? (
+                  <div className="spin-optimize">
+                    <LoadingSpinner />
                   </div>
-                </div>
-                <button
-                  type="submit"
-                  disabled={isLoading || (!inputMessage.trim() && !selectedFile)}
-                  className={`px-8 py-4 rounded-xl text-white font-medium shadow-lg transform transition-all duration-300 ${
-                    isLoading || (!inputMessage.trim() && !selectedFile)
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 hover:scale-[1.02] hover:shadow-xl'
-                  }`}
-                >
-                  发送
-                </button>
-              </div>
-            </form>
+                ) : (
+                  '发送'
+                )}
+              </button>
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* 快捷提示区域 */}
+      <div className="p-4 border-t border-gray-200">
+        <div className="flex gap-2 overflow-x-auto custom-scrollbar-optimize">
+          {quickPrompts.map((prompt, index) => (
+            <button
+              key={index}
+              onClick={() => handlePromptClick(prompt)}
+              className="px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded-full whitespace-nowrap hover-scale-optimize"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 错误提示 */}
+      {error && (
+        <div className="fixed top-4 right-4 p-4 bg-red-100 text-red-700 rounded-lg error-state-optimize">
+          {error}
+        </div>
+      )}
+
+      {/* 移动端优化 */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white mobile-optimize">
+        {/* 移动端的额外控件 */}
       </div>
 
       {/* 导出模态框 */}
@@ -646,5 +654,29 @@ const ChatPage = () => {
     </div>
   );
 };
+
+// LoadingSpinner 组件
+const LoadingSpinner = () => (
+  <svg
+    className="w-5 h-5 text-white icon-optimize"
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+  >
+    <circle
+      className="opacity-25"
+      cx="12"
+      cy="12"
+      r="10"
+      stroke="currentColor"
+      strokeWidth="4"
+    />
+    <path
+      className="opacity-75"
+      fill="currentColor"
+      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+    />
+  </svg>
+);
 
 export default React.memo(ChatPage); 
