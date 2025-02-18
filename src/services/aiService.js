@@ -56,6 +56,11 @@ export const sendMessageToAI = async (message, modelId, messageHistory = []) => 
   let lastError = null;
   
   try {
+    // 检查参数
+    if (!message || !modelId) {
+      throw new Error('缺少必要参数');
+    }
+
     // 构建消息历史，只保留最近的2条消息以减少请求数据量
     const messages = [
       {
@@ -73,6 +78,7 @@ export const sendMessageToAI = async (message, modelId, messageHistory = []) => 
     const cacheKey = getCacheKey(modelId, messages);
     const cachedResponse = responseCache.get(cacheKey);
     if (cachedResponse && Date.now() - cachedResponse.timestamp < CACHE_EXPIRY) {
+      console.log('使用缓存的响应');
       return cachedResponse.content;
     }
 
@@ -84,9 +90,9 @@ export const sendMessageToAI = async (message, modelId, messageHistory = []) => 
     const requestBody = {
       model: modelId,
       messages: messages,
-      temperature: isDeepSeekV3 ? 0.3 : 0.7,    // DeepSeek V3使用更低的temperature
-      max_tokens: isDeepSeekV3 ? 500 : 1000,    // DeepSeek V3限制更短的回复
-      top_p: isDeepSeekV3 ? 0.5 : 1,           // 降低采样范围提高响应速度
+      temperature: isDeepSeekV3 ? 0.3 : 0.7,
+      max_tokens: isDeepSeekV3 ? 500 : 1000,
+      top_p: isDeepSeekV3 ? 0.5 : 1,
       presence_penalty: 0,
       frequency_penalty: 0,
       stream: false
@@ -96,13 +102,17 @@ export const sendMessageToAI = async (message, modelId, messageHistory = []) => 
     for (let attempt = 0; attempt <= RETRY_COUNT; attempt++) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), isDeepSeekV3 ? 30000 : 20000); // DeepSeek V3给予更长的超时时间
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+          console.log(`请求超时 (尝试 ${attempt + 1}/${RETRY_COUNT + 1})`);
+        }, isDeepSeekV3 ? 30000 : 20000);
 
         try {
+          console.log(`开始第 ${attempt + 1} 次请求`);
           const data = await sendSingleRequest(requestBody, controller);
           clearTimeout(timeoutId);
 
-          if (!data.choices?.[0]?.message?.content) {
+          if (!data?.choices?.[0]?.message?.content) {
             throw new Error('AI 响应格式无效');
           }
 
@@ -114,32 +124,43 @@ export const sendMessageToAI = async (message, modelId, messageHistory = []) => 
             timestamp: Date.now()
           });
 
+          console.log('请求成功');
           return content;
-        } finally {
+        } catch (error) {
           clearTimeout(timeoutId);
+          throw error;
         }
       } catch (error) {
         lastError = error;
-        
-        // 如果是最后一次尝试，直接抛出错误
+        console.error(`第 ${attempt + 1} 次请求失败:`, error);
+
         if (attempt === RETRY_COUNT) {
-          throw error;
+          throw new Error(getErrorMessage(error));
         }
-        
-        // 如果不是最后一次尝试，等待后重试
-        console.log(`第 ${attempt + 1} 次请求失败，准备重试...`);
+
+        console.log(`等待 ${RETRY_DELAY}ms 后重试...`);
         await delay(RETRY_DELAY);
       }
     }
-
   } catch (error) {
-    if (error.name === 'AbortError') {
-      throw new Error('请求超时，请重试或尝试使用其他模型');
-    }
-    if (error.message.includes('Failed to fetch')) {
-      throw new Error('网络连接失败，请检查网络后重试');
-    }
-    console.error('请求错误:', error);
-    throw new Error(lastError?.message || '请求失败，请稍后重试');
+    console.error('请求最终失败:', error);
+    throw new Error(getErrorMessage(error));
   }
+};
+
+// 获取友好的错误消息
+const getErrorMessage = (error) => {
+  if (error.name === 'AbortError') {
+    return '请求超时，请重试或尝试使用其他模型';
+  }
+  if (error.message.includes('Failed to fetch')) {
+    return '网络连接失败，请检查网络后重试';
+  }
+  if (error.message.includes('API key')) {
+    return 'API 密钥无效，请联系管理员';
+  }
+  if (error.message.includes('Rate limit')) {
+    return '请求过于频繁，请稍后再试';
+  }
+  return error.message || '请求失败，请稍后重试';
 }; 

@@ -1,6 +1,6 @@
 export const API_CONFIG = {
-  BASE_URL: 'https://api.siliconflow.com/v1',
-  API_KEY: 'sk-subzchucvlbjekmvaidkqgjotgfagmsompsmlfiwvvywofvi'
+  BASE_URL: process.env.REACT_APP_API_BASE_URL,
+  API_KEY: process.env.REACT_APP_API_KEY
 };
 
 export const MODEL_CATEGORIES = {

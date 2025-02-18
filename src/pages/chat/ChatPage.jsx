@@ -97,12 +97,17 @@ const LoadingIndicator = React.memo(() => (
     <div className="relative">
       <div className="w-12 h-12 rounded-full border-2 border-purple-600 border-t-transparent animate-spin"></div>
       <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600"></div>
+        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 animate-pulse"></div>
       </div>
     </div>
-    <span className="ml-3 text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600 font-medium">
-      AI 正在思考中...
-    </span>
+    <div className="ml-3 flex flex-col">
+      <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600 font-medium">
+        AI 正在思考中...
+      </span>
+      <span className="text-xs text-gray-500 mt-1">
+        使用模型: {selectedModel?.name}
+      </span>
+    </div>
   </div>
 ));
 
