@@ -2,6 +2,231 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 性能优化：使用 CSS 硬件加速 */
+@layer utilities {
+  .hardware-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000;
+  }
+}
+
+/* 优化加载性能 */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply antialiased text-gray-900;
+    font-feature-settings: "ss01", "ss02", "cv01", "cv02";
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* 预加载动画 */
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  .skeleton-loading {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+/* 优化动画性能 */
+@layer utilities {
+  .animate-gpu {
+    transform: translate3d(0, 0, 0);
+    will-change: transform;
+  }
+
+  .animate-smooth {
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+/* 优化滚动性能 */
+.scroll-smooth {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-container {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-snap-type: y proximity;
+}
+
+.scroll-item {
+  scroll-snap-align: start;
+}
+
+/* 优化响应式设计 */
+@media (max-width: 640px) {
+  .mobile-optimize {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+}
+
+/* 优化加载状态 */
+@keyframes pulse-optimize {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.98);
+  }
+}
+
+.animate-pulse-optimize {
+  animation: pulse-optimize 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* 优化交互动画 */
+@keyframes scale-optimize {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.hover-scale-optimize {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-scale-optimize:hover {
+  transform: scale(1.02);
+}
+
+/* 优化消息动画 */
+@keyframes message-appear-optimize {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-appear-optimize {
+  animation: message-appear-optimize 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* 优化加载动画 */
+@keyframes spin-optimize {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin-optimize {
+  animation: spin-optimize 1s linear infinite;
+  transform-origin: center center;
+}
+
+/* 优化模态框动画 */
+@keyframes modal-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-optimize {
+  animation: modal-appear 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* 优化按钮点击效果 */
+.button-optimize {
+  transform: translateY(0);
+  transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.button-optimize:active {
+  transform: translateY(1px);
+}
+
+/* 优化输入框焦点效果 */
+.input-optimize {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.input-optimize:focus {
+  border-color: theme('colors.purple.500');
+  box-shadow: 0 0 0 2px theme('colors.purple.100');
+}
+
+/* 优化滚动条样式 */
+.custom-scrollbar-optimize {
+  scrollbar-width: thin;
+  scrollbar-color: theme('colors.purple.500') transparent;
+}
+
+.custom-scrollbar-optimize::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar-optimize::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar-optimize::-webkit-scrollbar-thumb {
+  background-color: theme('colors.purple.500');
+  border-radius: 3px;
+}
+
+/* 优化图标动画 */
+.icon-optimize {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.icon-optimize:hover {
+  transform: scale(1.1);
+}
+
+/* 优化加载失败状态 */
+.error-state-optimize {
+  animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes shake {
+  10%, 90% {
+    transform: translateX(-1px);
+  }
+  20%, 80% {
+    transform: translateX(2px);
+  }
+  30%, 50%, 70% {
+    transform: translateX(-2px);
+  }
+  40%, 60% {
+    transform: translateX(2px);
+  }
+}
+
 @layer base {
   body {
     @apply antialiased text-gray-900;
@@ -193,3 +418,4 @@
     background-position: 100% 50%;
   }
 }
+
