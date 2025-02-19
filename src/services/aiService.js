@@ -53,33 +53,6 @@ const sendSingleRequest = async (requestBody, controller) => {
 };
 
 export const sendMessageToAI = async (message, modelId, messageHistory = []) => {
-  // 开发环境下返回模拟响应
-  if (process.env.NODE_ENV === 'development') {
-    await new Promise(resolve => setTimeout(resolve, 1000)); // 模拟延迟
-
-    // 根据不同模型生成不同风格的回复
-    let response = '';
-    const modelName = modelId.toLowerCase();
-
-    if (modelName.includes('deepseek')) {
-      response = `使用模型: DeepSeek R1 70B\n\n您好！让我来详细分析一下这个问题：\n\n1. 核心要点分析：\n   - ${message} 涉及到的主要问题\n   - 需要考虑的关键因素\n   - 可能存在的挑战\n\n2. 解决方案：\n   a) 短期策略：\n      - 立即可以采取的行动\n      - 快速见效的方法\n   b) 长期策略：\n      - 持续优化的方向\n      - 需要逐步实施的计划\n\n3. 具体实施建议：\n   - 第一步：...\n   - 第二步：...\n   - 第三步：...\n\n4. 注意事项：\n   - 实施过程中需要注意的关键点\n   - 可能遇到的问题及解决方案\n\n5. 补充说明：\n   - 相关的最佳实践\n   - 参考资料和文档\n\n希望这个分析对您有帮助。如果您需要更详细的信息或有任何疑问，请随时告诉我。`;
-    } else if (modelName.includes('qwen')) {
-      response = `使用模型: Qwen 2.5 72B\n\n让我从专业的角度为您分析这个问题：\n\n【问题分析】\n${message} 这个问题涉及以下几个维度：\n1. 技术层面\n2. 业务层面\n3. 用户体验层面\n\n【解决方案】\n基于我的分析，建议采用以下解决方案：\n\n1. 技术实现\n   * 核心架构\n   * 关键组件\n   * 性能优化\n\n2. 业务流程\n   * 流程优化\n   * 数据处理\n   * 监控反馈\n\n3. 用户体验提升\n   * 交互设计\n   * 界面优化\n   * 性能体验\n\n【实施步骤】\n1. 前期准备\n   - 需求分析\n   - 技术选型\n   - 资源评估\n\n2. 开发阶段\n   - 架构设计\n   - 功能实现\n   - 测试验证\n\n3. 部署运维\n   - 环境部署\n   - 监控告警\n   - 性能优化\n\n【最佳实践】\n* 开发规范\n* 代码审查\n* 持续集成\n* 自动化测试\n\n如果您需要更具体的建议或有任何疑问，我很乐意为您进一步解答。`;
-    } else {
-      response = `使用模型: ${modelId}\n\n感谢您的提问！这是一个很好的问题，让我们深入探讨：\n\n1. 背景分析\n   - 当前状况\n   - 存在的问题\n   - 影响因素\n\n2. 技术方案\n   - 架构设计\n   - 核心算法\n   - 性能优化\n\n3. 实现步骤\n   - 环境准备\n   - 开发流程\n   - 部署方案\n\n4. 最佳实践\n   - 编码规范\n   - 测试策略\n   - 运维建议\n\n5. 注意事项\n   - 安全考虑\n   - 扩展性设计\n   - 维护建议\n\n6. 参考资源\n   - 技术文档\n   - 相关案例\n   - 学习资料\n\n希望这些信息对您有帮助！如果您需要更详细的说明或有其他问题，请随时询问。`;
-    }
-
-    return {
-      text: response,
-      model: modelId,
-      usage: {
-        promptTokens: 150,
-        completionTokens: 800,
-        totalTokens: 950
-      }
-    };
-  }
-
   let lastError = null;
   
   try {
@@ -126,16 +99,6 @@ export const sendMessageToAI = async (message, modelId, messageHistory = []) => 
         content: message
       }
     ];
-
-    // 检查缓存
-    const cacheKey = getCacheKey(modelId, messages);
-    const cachedResponse = responseCache.get(cacheKey);
-    if (cachedResponse && Date.now() - cachedResponse.timestamp < CACHE_EXPIRY) {
-      return cachedResponse.content;
-    }
-
-    // 清理过期缓存
-    cleanExpiredCache();
 
     // 根据不同模型优化参数
     const modelConfig = {
@@ -196,11 +159,10 @@ export const sendMessageToAI = async (message, modelId, messageHistory = []) => 
 
           // 处理响应内容
           const responseText = data.choices[0].message.content;
-          const content = {
+          return {
             text: responseText,
             model: modelId,
             usage: data.usage,
-            timestamp: Date.now(),
             metadata: {
               modelType: getModelType(modelId),
               responseLength: responseText.length,
@@ -208,14 +170,6 @@ export const sendMessageToAI = async (message, modelId, messageHistory = []) => 
               attemptCount: attempt + 1
             }
           };
-
-          // 缓存响应
-          responseCache.set(cacheKey, {
-            content,
-            timestamp: Date.now()
-          });
-
-          return content;
         } finally {
           clearTimeout(timeoutId);
         }

@@ -1,242 +1,146 @@
-import React, { useState, useEffect } from 'react';
-import { CHAT_CATEGORIES, getAllChats, searchChats, deleteChats, toggleChatStar, getAllTags } from '../../services/chatHistoryService';
+import React, { useState, useEffect, useCallback } from 'react';
+import { getAllChats, searchChats, deleteChats, toggleChatStar } from '../../services/chatHistoryService';
 
-const ChatHistory = ({ onSelectChat, selectedChatId }) => {
+const ChatHistory = ({ onSelectChat, selectedChatId, onNewChat }) => {
   const [chats, setChats] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedTags, setSelectedTags] = useState([]);
-  const [showStarredOnly, setShowStarredOnly] = useState(false);
-  const [selectedChats, setSelectedChats] = useState([]);
-  const [availableTags, setAvailableTags] = useState([]);
-  const [isExporting, setIsExporting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // 加载对话列表
-  useEffect(() => {
-    loadChats();
-    setAvailableTags(getAllTags());
-  }, []);
-
-  // 加载对话
-  const loadChats = () => {
+  const loadChats = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const filters = {
-        category: selectedCategory,
-        tags: selectedTags,
-        starred: showStarredOnly
-      };
-      const filteredChats = searchChats(searchQuery, filters);
-      setChats(filteredChats);
+      const result = searchQuery
+        ? await searchChats(searchQuery)
+        : await getAllChats();
+      setChats(result);
     } catch (error) {
       console.error('加载对话失败:', error);
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [searchQuery]);
 
-  // 监听筛选条件变化
+  // 监听搜索查询变化
   useEffect(() => {
     loadChats();
-  }, [searchQuery, selectedCategory, selectedTags, showStarredOnly]);
+  }, [loadChats]);
 
-  // 处理对话选择
-  const handleChatSelect = (chatId) => {
-    onSelectChat(chatId);
-  };
-
-  // 处理批量选择
-  const handleBulkSelect = (chatId) => {
-    setSelectedChats(prev => {
-      if (prev.includes(chatId)) {
-        return prev.filter(id => id !== chatId);
-      }
-      return [...prev, chatId];
-    });
-  };
-
-  // 处理批量删除
-  const handleBulkDelete = async () => {
-    if (window.confirm('确定要删除选中的对话吗？')) {
+  // 处理对话删除
+  const handleDelete = async (chatId, e) => {
+    e.stopPropagation();
+    if (window.confirm('确定要删除这个对话吗？')) {
       try {
-        await deleteChats(selectedChats);
-        setSelectedChats([]);
+        await deleteChats([chatId]);
         loadChats();
       } catch (error) {
-        console.error('批量删除失败:', error);
+        console.error('删除对话失败:', error);
       }
     }
   };
 
-  // 处理导出
-  const handleExport = async (format) => {
-    setIsExporting(true);
+  // 处理对话标星
+  const handleStar = async (chatId, e) => {
+    e.stopPropagation();
     try {
-      const exportData = await exportChats(selectedChats, format);
-      const blob = new Blob([exportData], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `chats_export_${new Date().toISOString()}.${format}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      await toggleChatStar(chatId);
+      loadChats();
     } catch (error) {
-      console.error('导出失败:', error);
-    } finally {
-      setIsExporting(false);
+      console.error('标星操作失败:', error);
     }
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* 搜索和过滤区域 */}
-      <div className="p-4 border-b border-gray-200 space-y-4">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="搜索对话..."
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-        />
-        
-        <div className="flex flex-wrap gap-2">
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          >
-            <option value="">所有分类</option>
-            {Object.entries(CHAT_CATEGORIES).map(([key, value]) => (
-              <option key={key} value={value}>{value}</option>
-            ))}
-          </select>
+    <div className="flex flex-col h-full bg-white border-r border-gray-200">
+      {/* 顶部操作区 */}
+      <div className="p-4 border-b border-gray-200">
+        <button
+          onClick={onNewChat}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          新对话
+        </button>
 
-          <div className="flex-1 flex flex-wrap gap-2">
-            {availableTags.map(tag => (
-              <button
-                key={tag}
-                onClick={() => setSelectedTags(prev => 
-                  prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
-                )}
-                className={`px-3 py-1 rounded-full text-sm ${
-                  selectedTags.includes(tag)
-                    ? 'bg-purple-100 text-purple-700'
-                    : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={() => setShowStarredOnly(prev => !prev)}
-            className={`p-2 rounded-lg ${
-              showStarredOnly ? 'text-yellow-500' : 'text-gray-400'
-            }`}
-          >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-            </svg>
-          </button>
+        <div className="mt-4">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜索对话..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          />
         </div>
       </div>
 
-      {/* 批量操作工具栏 */}
-      {selectedChats.length > 0 && (
-        <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-          <span className="text-sm text-gray-600">
-            已选择 {selectedChats.length} 个对话
-          </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleExport('json')}
-              disabled={isExporting}
-              className="px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 rounded-lg"
-            >
-              导出 JSON
-            </button>
-            <button
-              onClick={() => handleExport('markdown')}
-              disabled={isExporting}
-              className="px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 rounded-lg"
-            >
-              导出 Markdown
-            </button>
-            <button
-              onClick={handleBulkDelete}
-              className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg"
-            >
-              删除
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* 对话列表 */}
       <div className="flex-1 overflow-y-auto">
-        {chats.map(chat => (
-          <div
-            key={chat.id}
-            className={`p-4 border-b border-gray-200 hover:bg-gray-50 cursor-pointer ${
-              selectedChatId === chat.id ? 'bg-purple-50' : ''
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                checked={selectedChats.includes(chat.id)}
-                onChange={() => handleBulkSelect(chat.id)}
-                className="mt-1"
-              />
-              
-              <div className="flex-1" onClick={() => handleChatSelect(chat.id)}>
-                <div className="flex items-center justify-between">
-                  <h3 className="font-medium text-gray-900">{chat.title}</h3>
+        {isLoading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+          </div>
+        ) : chats.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-32 text-gray-500">
+            <svg className="w-8 h-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <p>{searchQuery ? '没有找到相关对话' : '暂无对话记录'}</p>
+          </div>
+        ) : (
+          <div className="space-y-1 p-2">
+            {chats.map((chat) => (
+              <div
+                key={chat.id}
+                onClick={() => onSelectChat(chat.id)}
+                className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors duration-200 ${
+                  selectedChatId === chat.id
+                    ? 'bg-purple-50 text-purple-700'
+                    : 'hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium truncate">{chat.title || '新对话'}</h3>
+                    {chat.isStarred && (
+                      <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500 truncate">
+                    {new Date(chat.updatedAt).toLocaleString()}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1">
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleChatStar(chat.id).then(loadChats);
-                    }}
-                    className={`p-1 rounded-full ${
-                      chat.starred ? 'text-yellow-500' : 'text-gray-400'
-                    }`}
+                    onClick={(e) => handleStar(chat.id, e)}
+                    className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-yellow-400"
+                    title={chat.isStarred ? '取消标星' : '标星'}
                   >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={(e) => handleDelete(chat.id, e)}
+                    className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-red-500"
+                    title="删除"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
                 </div>
-                
-                <p className="mt-1 text-sm text-gray-600 line-clamp-2">
-                  {chat.preview}
-                </p>
-                
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <span className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-full">
-                    {chat.category}
-                  </span>
-                  {chat.tags.map(tag => (
-                    <span
-                      key={tag}
-                      className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                
-                <div className="mt-2 flex items-center text-xs text-gray-500">
-                  <span>{new Date(chat.updatedAt).toLocaleString()}</span>
-                  <span className="mx-2">·</span>
-                  <span>{chat.messageCount} 条消息</span>
-                </div>
               </div>
-            </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
 };
 
-export default ChatHistory; 
+export default React.memo(ChatHistory); 

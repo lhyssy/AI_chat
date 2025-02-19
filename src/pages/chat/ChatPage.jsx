@@ -6,6 +6,9 @@ import { exportChat, generateShareLink, copyToClipboard, searchChatHistory } fro
 import { getBalance, getUsageStats, createRechargeOrder, checkOrderStatus, calculateMessageCost, checkBalanceSufficient } from '../../services/billingService';
 import BillingCard from '../../components/billing/BillingCard';
 import RechargeModal from '../../components/billing/RechargeModal';
+import ChatHistory from '../../components/chat/ChatHistory';
+import { createWechatPayOrder, createAlipayOrder, checkPaymentStatus } from '../../services/paymentService';
+import { saveChat, getChat } from '../../services/chatHistoryService';
 
 // 导入子组件
 import ChatInput from './components/ChatInput';
@@ -29,6 +32,8 @@ const ChatPage = () => {
   const [uploadError, setUploadError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
+  const [currentChatId, setCurrentChatId] = useState(null);
+  const [showSidebar, setShowSidebar] = useState(true);
 
   // Refs
   const messagesEndRef = useRef(null);
@@ -110,6 +115,41 @@ const ChatPage = () => {
     fetchBillingInfo();
   }, []);
 
+  // 加载对话历史
+  const loadChatHistory = useCallback((chatId) => {
+    if (!chatId) return;
+    const chat = getChat(chatId);
+    if (chat) {
+      setMessages(chat.messages || []);
+      setShowPrompts(false);
+      setCurrentChatId(chatId);
+    }
+  }, []);
+
+  // 保存当前对话
+  const saveCurrentChat = useCallback(async () => {
+    if (messages.length === 0) return;
+
+    const chatData = {
+      id: currentChatId,
+      messages,
+      title: messages[0]?.content.slice(0, 50) + '...',
+      model: selectedModel.id
+    };
+
+    const chatId = await saveChat(chatData);
+    if (!currentChatId) {
+      setCurrentChatId(chatId);
+    }
+  }, [messages, currentChatId, selectedModel]);
+
+  // 监听消息变化,自动保存
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveCurrentChat();
+    }
+  }, [messages, saveCurrentChat]);
+
   // 事件处理
   const handleModelChange = useCallback((e) => {
     const model = AVAILABLE_MODELS.find(m => m.id === e.target.value);
@@ -121,86 +161,78 @@ const ChatPage = () => {
 
   const handleQuickPrompt = useCallback((prompt) => {
     setInputMessage(prompt.title);
-    setShowPrompts(false);
+    handleSendMessage();
   }, []);
 
-  const handleSendMessage = useCallback(async (e) => {
+  const handleSendMessage = async (e) => {
     e?.preventDefault();
+    
     if (!inputMessage.trim() || isLoading) return;
 
+    // 检查余额
+    const estimatedCost = calculateMessageCost(inputMessage, selectedModel);
+    try {
+      const hasEnoughBalance = await checkBalanceSufficient(estimatedCost);
+      if (!hasEnoughBalance) {
+        setShowRechargeModal(true);
+        return;
+      }
+    } catch (error) {
+      console.warn('余额检查失败:', error);
+      // 继续发送消息,不阻止用户使用
+    }
+
     setIsLoading(true);
-    setError('');
     setShowPrompts(false);
 
-    const newMessage = {
+    const userMessage = {
       id: Date.now(),
       content: inputMessage,
       sender: 'user',
       timestamp: new Date().toISOString()
     };
 
-    const updatedMessages = [...messages, newMessage];
-    setMessages(updatedMessages);
+    setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
 
     try {
-      // 尝试检查余额，如果失败也允许发送消息
-      try {
-        const estimatedCost = calculateMessageCost(inputMessage, selectedModel);
-        const isBalanceSufficient = await checkBalanceSufficient(estimatedCost);
-        if (!isBalanceSufficient) {
-          console.warn('余额不足，但仍继续处理消息');
-        }
-      } catch (balanceError) {
-        console.warn('检查余额失败:', balanceError);
+      const response = await sendMessageToAI(inputMessage, selectedModel.id, messages);
+      
+      if (!response || !response.text) {
+        throw new Error('AI 响应格式无效');
       }
 
-      const response = await sendMessageToAI(inputMessage, selectedModel.id, messages);
       const aiMessage = {
         id: Date.now(),
         content: response.text,
         sender: 'ai',
-        model: selectedModel.name,
+        model: selectedModel.id,
         timestamp: new Date().toISOString()
       };
 
-      const finalMessages = [...updatedMessages, aiMessage];
-      setMessages(finalMessages);
-
-      // 保存对话到本地存储
-      const chatId = `chat_${Date.now()}`;
-      const chatData = {
-        id: chatId,
-        title: inputMessage.slice(0, 20) + (inputMessage.length > 20 ? '...' : ''),
-        messages: finalMessages,
-        timestamp: new Date().toISOString(),
-        modelId: selectedModel.id
-      };
-      localStorage.setItem(chatId, JSON.stringify(chatData));
-
-      // 更新聊天历史
-      setChatHistory(prev => [{
-        id: chatId,
-        title: chatData.title,
-        preview: inputMessage,
-        timestamp: chatData.timestamp,
-        messageCount: finalMessages.length
-      }, ...prev]);
-
-    } catch (err) {
-      console.error('发送消息错误:', err);
-      setError(err.message || '发送消息失败，请重试');
-      setMessages(prev => [...prev, {
-        id: Date.now(),
-        content: '抱歉，处理您的消息时出现错误。请重试。',
-        sender: 'ai',
-        isError: true,
-        timestamp: new Date().toISOString()
-      }]);
+      setMessages(prev => [...prev, aiMessage]);
+      
+      // 如果是新对话,保存对话
+      if (!currentChatId) {
+        saveCurrentChat();
+      }
+      
+    } catch (error) {
+      console.error('发送消息失败:', error);
+      setMessages(prev => [
+        ...prev,
+        {
+          id: Date.now(),
+          content: `抱歉，处理您的消息时出现错误：${error.message}`,
+          sender: 'ai',
+          isError: true,
+          timestamp: new Date().toISOString()
+        }
+      ]);
     } finally {
       setIsLoading(false);
     }
-  }, [inputMessage, isLoading, selectedModel, messages]);
+  };
 
   const handleFileSelect = useCallback(async (files) => {
     setUploadError('');
@@ -225,165 +257,142 @@ const ChatPage = () => {
     }
   }, [messages]);
 
-  const handleRecharge = useCallback(async (amount) => {
+  const handleRecharge = async (data) => {
     try {
-      const order = await createRechargeOrder(amount);
-      // 处理充值订单...
-    } catch (err) {
-      setError('创建充值订单失败');
+      let orderResult;
+      if (data.paymentMethod === 'wechat') {
+        orderResult = await createWechatPayOrder(data.amount);
+      } else if (data.paymentMethod === 'alipay') {
+        orderResult = await createAlipayOrder(data.amount);
+      }
+      
+      // TODO: 处理支付结果
+      console.log('支付订单创建成功:', orderResult);
+      
+    } catch (error) {
+      console.error('创建支付订单失败:', error);
     }
-  }, []);
+  };
+
+  // 处理新对话
+  const handleNewChat = () => {
+    setMessages([]);
+    setCurrentChatId(null);
+    setShowPrompts(true);
+  };
+
+  // 处理对话选择
+  const handleSelectChat = (chatId) => {
+    loadChatHistory(chatId);
+  };
 
   return (
-    <div className="flex flex-col h-screen hardware-accelerated">
-      {/* 主内容区域 */}
-      <div className="flex-1 flex">
-        {/* 左侧边栏 */}
-        <div className="w-72 bg-white border-r border-gray-200 flex flex-col shadow-sm">
-          <BillingCard
-            balance={balance}
-            usage={usage}
-            onRecharge={() => setShowRechargeModal(true)}
-          />
-          
-          <div className="p-6 space-y-4">
-            {/* 模型选择下拉框 */}
-            <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-2">选择模型</label>
-              <select
-                value={selectedModel.id}
-                onChange={handleModelChange}
-                className="w-full px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              >
-                {Object.entries(MODEL_CATEGORIES).map(([key, categoryName]) => (
-                  <optgroup key={key} label={categoryName}>
-                    {AVAILABLE_MODELS
-                      .filter(model => model.category === categoryName)
-                      .map(model => (
-                        <option key={model.id} value={model.id}>
-                          {model.name}
-                        </option>
-                      ))
-                    }
-                  </optgroup>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-gray-500">{selectedModel.description}</p>
-            </div>
-            
-            <button
-              onClick={() => navigate('/')}
-              className="w-full px-4 py-3 text-sm font-medium text-gray-700 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl hover:from-gray-100 hover:to-gray-200 transition-all duration-300 shadow-sm hover:shadow flex items-center justify-center space-x-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              <span>退出登录</span>
-            </button>
-          </div>
-          
-          {/* 搜索框和历史记录列表 */}
-          <div className="flex-1 flex flex-col">
-            <div className="px-4 py-2 border-b border-gray-200">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="搜索对话历史..."
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 scroll-container custom-scrollbar-optimize">
-              <div className="space-y-3">
-                {filteredHistoryMemo.map(item => (
-                  <div 
-                    key={item.id}
-                    className="p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer message-appear-optimize scroll-item"
-                    onClick={() => {
-                      const chatData = JSON.parse(localStorage.getItem(`chat_${item.id}`));
-                      if (chatData) {
-                        setMessages(chatData.messages);
-                        setShowPrompts(false);
-                      }
-                    }}
-                  >
-                    <h3 className="text-sm font-medium text-gray-900 mb-1">{item.title}</h3>
-                    <p className="text-xs text-gray-500 truncate">{item.preview}</p>
-                    <div className="flex justify-between items-center mt-2">
-                      <span className="text-xs text-gray-400">
-                        {new Date(item.timestamp).toLocaleString()}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {item.messageCount} 条消息
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 主聊天区域 */}
-        <div className="flex-1 flex flex-col max-w-5xl mx-auto w-full">
-          <ChatMessages
-            showPrompts={showPrompts}
-            messages={messages}
-            isLoading={isLoading}
-            onQuickPrompt={handleQuickPrompt}
-            quickPrompts={quickPrompts}
-            messagesEndRef={messagesEndRef}
-          />
-
-          <ChatInput
-            inputMessage={inputMessage}
-            onInputChange={setInputMessage}
-            onSendMessage={handleSendMessage}
-            isLoading={isLoading}
-            showFileUpload={showFileUpload}
-            onToggleFileUpload={() => setShowFileUpload(!showFileUpload)}
-            onFileSelect={handleFileSelect}
-            onFileError={handleFileError}
-            uploadError={uploadError}
-            isDragging={isDragging}
-            onResizeMouseDown={handleResizeMouseDown}
+    <div className="flex h-screen bg-gray-50">
+      {/* 侧边栏 */}
+      <div className={`w-80 flex flex-col ${showSidebar ? '' : 'hidden'}`}>
+        {/* 对话历史 */}
+        <div className="flex-1 overflow-hidden">
+          <ChatHistory
+            onSelectChat={handleSelectChat}
+            selectedChatId={currentChatId}
+            onNewChat={handleNewChat}
           />
         </div>
       </div>
 
-      {/* 错误提示 */}
-      {error && (
-        <div className="fixed top-4 right-4 p-4 bg-red-100 text-red-700 rounded-lg error-state-optimize">
-          {error}
-        </div>
-      )}
+      {/* 主聊天区域 */}
+      <div className="flex-1 flex flex-col bg-white">
+        {/* 顶部工具栏 */}
+        <div className="h-16 border-b border-gray-200 flex items-center px-4 justify-between">
+          <button
+            onClick={() => setShowSidebar(prev => !prev)}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+          >
+            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
 
-      {/* 导出模态框 */}
-      {showExportModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium mb-4">导出对话</h3>
-            <div className="space-y-3">
-              {Object.values(EXPORT_FORMATS).map(format => (
-                <button
-                  key={format}
-                  onClick={() => handleExport(format)}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-purple-50 rounded-lg transition-colors duration-200"
-                >
-                  导出为 {format.toUpperCase()} 格式
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setShowExportModal(false)}
-              className="mt-4 w-full px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+          <div className="flex items-center space-x-4">
+            <select
+              value={selectedModel.id}
+              onChange={(e) => {
+                const model = AVAILABLE_MODELS.find(m => m.id === e.target.value);
+                setSelectedModel(model);
+              }}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             >
-              取消
-            </button>
+              {AVAILABLE_MODELS.map(model => (
+                <option key={model.id} value={model.id}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
+
+            {currentChatId && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const chat = getChat(currentChatId);
+                    if (chat) {
+                      const blob = new Blob([JSON.stringify(chat, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `chat_${chat.title}_${new Date().toISOString()}.json`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg text-gray-600"
+                  title="导出对话"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => {
+                    const chat = getChat(currentChatId);
+                    if (chat) {
+                      const url = `${window.location.origin}/chat/share/${chat.id}`;
+                      navigator.clipboard.writeText(url).then(() => {
+                        alert('分享链接已复制到剪贴板');
+                      });
+                    }
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg text-gray-600"
+                  title="分享对话"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      )}
+
+        {/* 消息列表 */}
+        <ChatMessages
+          showPrompts={showPrompts}
+          messages={messages}
+          isLoading={isLoading}
+          onQuickPrompt={handleQuickPrompt}
+          quickPrompts={quickPrompts}
+          messagesEndRef={messagesEndRef}
+        />
+
+        {/* 输入区域 */}
+        <ChatInput
+          inputMessage={inputMessage}
+          onInputChange={setInputMessage}
+          onSendMessage={handleSendMessage}
+          isLoading={isLoading}
+        />
+      </div>
 
       {/* 充值模态框 */}
       <RechargeModal

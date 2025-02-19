@@ -5,10 +5,8 @@ export const CHAT_CATEGORIES = {
   GENERAL: '通用对话',
   TECHNICAL: '技术咨询',
   BUSINESS: '商务咨询',
-  CREATIVE: '创意写作',
-  ANALYSIS: '数据分析',
-  TRANSLATION: '翻译助手',
-  OTHERS: '其他'
+  DATA_ANALYSIS: '数据分析',
+  OTHER: '其他'
 };
 
 // 预设标签
@@ -16,8 +14,6 @@ export const DEFAULT_TAGS = [
   '重要',
   '待处理',
   '已完成',
-  '参考',
-  '项目相关',
   '学习笔记',
   '问题解决'
 ];
@@ -39,7 +35,8 @@ const initStorage = () => {
 // 获取所有对话
 export const getAllChats = () => {
   initStorage();
-  return JSON.parse(localStorage.getItem(STORAGE_KEY));
+  const chats = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  return chats.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 };
 
 // 获取单个对话
@@ -49,92 +46,70 @@ export const getChat = (chatId) => {
 };
 
 // 保存对话
-export const saveChat = (chatData) => {
+export const saveChat = (chat) => {
   const chats = getAllChats();
   const now = new Date().toISOString();
-  
-  // 如果是新对话
-  if (!chatData.id) {
-    const newChat = {
-      id: uuidv4(),
-      title: chatData.title || '新对话',
-      messages: chatData.messages || [],
-      category: chatData.category || CHAT_CATEGORIES.GENERAL,
-      tags: chatData.tags || [],
-      starred: false,
-      preview: generatePreview(chatData.messages),
-      messageCount: chatData.messages?.length || 0,
-      createdAt: now,
-      updatedAt: now
-    };
-    chats.unshift(newChat);
-  } else {
+
+  if (chat.id) {
     // 更新现有对话
-    const index = chats.findIndex(chat => chat.id === chatData.id);
+    const index = chats.findIndex(c => c.id === chat.id);
     if (index !== -1) {
       chats[index] = {
         ...chats[index],
-        ...chatData,
-        preview: generatePreview(chatData.messages || chats[index].messages),
-        messageCount: chatData.messages?.length || chats[index].messageCount,
+        ...chat,
         updatedAt: now
       };
     }
+  } else {
+    // 创建新对话
+    chats.unshift({
+      id: uuidv4(),
+      title: chat.title || '新对话',
+      messages: chat.messages || [],
+      category: chat.category || CHAT_CATEGORIES.GENERAL,
+      tags: chat.tags || [],
+      isStarred: false,
+      createdAt: now,
+      updatedAt: now
+    });
   }
-  
+
   localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
-  return chatData.id || chats[0].id;
+  return chat.id ? chat : chats[0];
 };
 
 // 删除对话
-export const deleteChats = async (chatIds) => {
-  const chats = getAllChats();
-  const updatedChats = chats.filter(chat => !chatIds.includes(chat.id));
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedChats));
+export const deleteChats = (chatIds) => {
+  let chats = getAllChats();
+  chats = chats.filter(chat => !chatIds.includes(chat.id));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
 };
 
-// 切换对话星标状态
-export const toggleChatStar = async (chatId) => {
+// 切换对话标星状态
+export const toggleChatStar = (chatId) => {
   const chats = getAllChats();
   const index = chats.findIndex(chat => chat.id === chatId);
   if (index !== -1) {
-    chats[index].starred = !chats[index].starred;
+    chats[index].isStarred = !chats[index].isStarred;
+    chats[index].updatedAt = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
   }
 };
 
 // 搜索对话
-export const searchChats = (query, filters = {}) => {
-  let chats = getAllChats();
-  
-  // 应用搜索查询
-  if (query) {
-    const lowerQuery = query.toLowerCase();
-    chats = chats.filter(chat => 
-      chat.title.toLowerCase().includes(lowerQuery) ||
-      chat.preview.toLowerCase().includes(lowerQuery) ||
-      chat.tags.some(tag => tag.toLowerCase().includes(lowerQuery))
+export const searchChats = (query) => {
+  const chats = getAllChats();
+  const lowerQuery = query.toLowerCase();
+  return chats.filter(chat => {
+    const titleMatch = chat.title.toLowerCase().includes(lowerQuery);
+    const messageMatch = chat.messages.some(msg => 
+      msg.content.toLowerCase().includes(lowerQuery)
     );
-  }
-  
-  // 应用分类过滤
-  if (filters.category) {
-    chats = chats.filter(chat => chat.category === filters.category);
-  }
-  
-  // 应用标签过滤
-  if (filters.tags && filters.tags.length > 0) {
-    chats = chats.filter(chat => 
-      filters.tags.every(tag => chat.tags.includes(tag))
+    const tagMatch = chat.tags?.some(tag => 
+      tag.toLowerCase().includes(lowerQuery)
     );
-  }
-  
-  // 应用星标过滤
-  if (filters.starred) {
-    chats = chats.filter(chat => chat.starred);
-  }
-  
-  return chats;
+    return titleMatch || messageMatch || tagMatch;
+  });
 };
 
 // 获取所有标签
@@ -150,26 +125,31 @@ export const addTag = (tag) => {
     tags.push(tag);
     localStorage.setItem(TAGS_KEY, JSON.stringify(tags));
   }
+  return tags;
 };
 
 // 导出对话
-export const exportChats = async (chatIds, format = 'json') => {
+export const exportChats = (chatIds, format = 'json') => {
   const chats = getAllChats().filter(chat => chatIds.includes(chat.id));
   
   if (format === 'json') {
     return JSON.stringify(chats, null, 2);
-  } else if (format === 'markdown') {
+  }
+  
+  if (format === 'markdown') {
     return chats.map(chat => {
       let markdown = `# ${chat.title}\n\n`;
-      markdown += `分类：${chat.category}\n`;
-      markdown += `标签：${chat.tags.join(', ')}\n`;
-      markdown += `创建时间：${new Date(chat.createdAt).toLocaleString()}\n`;
-      markdown += `更新时间：${new Date(chat.updatedAt).toLocaleString()}\n\n`;
-      markdown += `## 对话内容\n\n`;
+      markdown += `- 创建时间：${new Date(chat.createdAt).toLocaleString()}\n`;
+      markdown += `- 更新时间：${new Date(chat.updatedAt).toLocaleString()}\n`;
+      markdown += `- 分类：${chat.category}\n`;
+      if (chat.tags?.length) {
+        markdown += `- 标签：${chat.tags.join(', ')}\n`;
+      }
+      markdown += '\n## 对话内容\n\n';
       
       chat.messages.forEach(msg => {
-        markdown += `### ${msg.sender === 'user' ? '用户' : 'AI'}\n`;
-        markdown += `${msg.content}\n\n`;
+        const role = msg.role === 'user' ? '我' : 'AI';
+        markdown += `### ${role}\n\n${msg.content}\n\n`;
       });
       
       return markdown;
