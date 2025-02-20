@@ -17,13 +17,13 @@
     scroll-behavior: smooth;
   }
 
-  body {
+body {
     @apply antialiased text-gray-900;
     font-feature-settings: "ss01", "ss02", "cv01", "cv02";
     text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
   /* 预加载动画 */
   @keyframes shimmer {
