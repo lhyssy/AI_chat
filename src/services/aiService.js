@@ -56,6 +56,16 @@ export const sendMessageToAI = async (message, modelId, messageHistory = []) => 
   let lastError = null;
   
   try {
+    // 检查缓存
+    const cacheKey = getCacheKey(modelId, [...messageHistory, { content: message }]);
+    const cachedResponse = responseCache.get(cacheKey);
+    if (cachedResponse && Date.now() - cachedResponse.timestamp < CACHE_EXPIRY) {
+      return cachedResponse.data;
+    }
+
+    // 清理过期缓存
+    cleanExpiredCache();
+
     // 优化消息历史处理
     const MAX_HISTORY_MESSAGES = 10;  // 保留最近10条消息
     const MAX_TOKENS_PER_MESSAGE = 500;  // 每条消息最大token数
@@ -159,7 +169,7 @@ export const sendMessageToAI = async (message, modelId, messageHistory = []) => 
 
           // 处理响应内容
           const responseText = data.choices[0].message.content;
-          return {
+          const response = {
             text: responseText,
             model: modelId,
             usage: data.usage,
@@ -170,6 +180,14 @@ export const sendMessageToAI = async (message, modelId, messageHistory = []) => 
               attemptCount: attempt + 1
             }
           };
+
+          // 缓存响应
+          responseCache.set(cacheKey, {
+            data: response,
+            timestamp: Date.now()
+          });
+
+          return response;
         } finally {
           clearTimeout(timeoutId);
         }

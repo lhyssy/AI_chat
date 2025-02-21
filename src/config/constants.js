@@ -69,7 +69,8 @@ export const ROUTES = {
   REGISTER: '/register',
   CHAT: '/chat',
   PROFILE: '/profile',
-  SETTINGS: '/settings'
+  SETTINGS: '/settings',
+  FORGOT_PASSWORD: '/forgot-password'
 };
 
 // 本地存储键名

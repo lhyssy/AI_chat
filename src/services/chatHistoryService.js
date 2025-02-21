@@ -57,6 +57,7 @@ export const saveChat = (chat) => {
       chats[index] = {
         ...chats[index],
         ...chat,
+        preview: generatePreview(chat.messages),
         updatedAt: now
       };
     }
@@ -66,6 +67,7 @@ export const saveChat = (chat) => {
       id: uuidv4(),
       title: chat.title || '新对话',
       messages: chat.messages || [],
+      preview: generatePreview(chat.messages),
       category: chat.category || CHAT_CATEGORIES.GENERAL,
       tags: chat.tags || [],
       isStarred: false,

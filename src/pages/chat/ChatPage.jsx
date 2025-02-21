@@ -4,6 +4,7 @@ import { AVAILABLE_MODELS, MODEL_CATEGORIES, SYSTEM_PROMPTS, EXPORT_FORMATS } fr
 import { sendMessageToAI } from '../../services/aiService';
 import { exportChat, generateShareLink, copyToClipboard, searchChatHistory } from '../../utils/chatUtils';
 import { getBalance, getUsageStats, createRechargeOrder, checkOrderStatus, calculateMessageCost, checkBalanceSufficient, updateUsageStats } from '../../services/billingService';
+import { websocketService } from '../../services/websocketService';
 import BillingCard from '../../components/billing/BillingCard';
 import RechargeModal from '../../components/billing/RechargeModal';
 import ChatHistory from '../../components/chat/ChatHistory';
@@ -159,94 +160,65 @@ const ChatPage = () => {
     }
   }, []);
 
+  useEffect(() => {
+    // 连接WebSocket
+    websocketService.connect();
+
+    // 添加消息处理器
+    const handleWebSocketMessage = (data) => {
+      if (data.type === 'message') {
+        // 处理接收到的消息
+        setMessages(prevMessages => [...prevMessages, {
+          id: Date.now(),
+          role: 'assistant',
+          content: data.content
+        }]);
+      }
+    };
+
+    websocketService.addMessageHandler(handleWebSocketMessage);
+
+    // 清理函数
+    return () => {
+      websocketService.removeMessageHandler(handleWebSocketMessage);
+      websocketService.disconnect();
+    };
+  }, []);
+
+  const handleSendMessage = async (message) => {
+    try {
+      // 发送消息到WebSocket服务器
+      websocketService.sendMessage({
+        type: 'message',
+        content: message
+      });
+
+      // 更新本地消息列表
+      setMessages(prevMessages => [...prevMessages, {
+        id: Date.now(),
+        role: 'user',
+        content: message
+      }]);
+
+      // 调用AI服务
+      const response = await sendMessageToAI(message);
+      
+      // 更新本地消息列表
+      setMessages(prevMessages => [...prevMessages, {
+        id: Date.now(),
+        role: 'assistant',
+        content: response.content
+      }]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // 处理错误...
+    }
+  };
+
   const handleQuickPrompt = useCallback((prompt) => {
     setInputMessage(prompt.title);
     handleSendMessage();
-  }, []);
-
-  const handleSendMessage = async (e) => {
-    e?.preventDefault();
-    
-    if (!inputMessage.trim() || isLoading) return;
-
-    // 检查余额
-    const estimatedCost = calculateMessageCost(inputMessage, selectedModel);
-    try {
-      const hasEnoughBalance = await checkBalanceSufficient(estimatedCost);
-      if (!hasEnoughBalance) {
-        setShowRechargeModal(true);
-        return;
-      }
-    } catch (error) {
-      console.warn('余额检查失败:', error);
-    }
-
-    setIsLoading(true);
-    setShowPrompts(false);
-
-    const userMessage = {
-      id: Date.now(),
-      content: inputMessage,
-      sender: 'user',
-      timestamp: new Date().toISOString()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInputMessage('');
-
-    try {
-      const response = await sendMessageToAI(inputMessage, selectedModel.id, messages);
-      
-      if (!response || !response.text) {
-        throw new Error('AI 响应格式无效');
-      }
-
-      // 更新使用统计
-      try {
-        await updateUsageStats(response.tokens);
-        const [balanceData, usageData] = await Promise.all([
-          getBalance(),
-          getUsageStats()
-        ]);
-        setBalance(balanceData);
-        setUsage(usageData);
-      } catch (err) {
-        console.error('更新使用统计失败:', err);
-      }
-
-      const aiMessage = {
-        id: Date.now(),
-        content: response.text,
-        sender: 'ai',
-        model: selectedModel.id,
-        timestamp: new Date().toISOString(),
-        tokens: response.tokens,
-        cost: response.cost
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
-      
-      // 如果是新对话,保存对话
-      if (!currentChatId) {
-        saveCurrentChat();
-      }
-      
-    } catch (error) {
-      console.error('发送消息失败:', error);
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now(),
-          content: `抱歉，处理您的消息时出现错误：${error.message}`,
-          sender: 'ai',
-          isError: true,
-          timestamp: new Date().toISOString()
-        }
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [handleSendMessage]);
 
   const handleFileSelect = useCallback(async (files) => {
     setUploadError('');

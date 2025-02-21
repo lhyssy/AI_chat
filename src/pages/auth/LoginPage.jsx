@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import { storage } from '../../utils/helpers';
+import { STORAGE_KEYS } from '../../config/constants';
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
   const [submitError, setSubmitError] = useState('');
 
   const validationSchema = Yup.object({
@@ -15,15 +20,62 @@ const LoginPage = () => {
   const handleSubmit = async (values, { setSubmitting }) => {
     try {
       setSubmitError('');
-      // TODO: 调用登录 API
-      console.log(values);
       
-      // 模拟 API 调用延迟
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('Current environment:', process.env.NODE_ENV);
+      console.log('Is development:', process.env.NODE_ENV === 'development');
       
-      // 登录成功后跳转到主页
-      // TODO: 保存登录状态和token
-      navigate('/chat');
+      // 开发环境模拟登录
+      if (true) { // 强制使用开发环境逻辑
+        console.log('Executing development login flow');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const mockUserData = {
+          id: '1',
+          email: values.email,
+          username: values.email.split('@')[0],
+          token: 'mock-token-123'
+        };
+        
+        console.log('Mock user data:', mockUserData);
+        
+        // 保存token
+        storage.set(STORAGE_KEYS.TOKEN, mockUserData.token);
+        
+        // 更新认证状态
+        await login(mockUserData);
+        
+        // 跳转到之前的页面或聊天页面
+        const from = location.state?.from?.pathname || '/chat';
+        console.log('Navigating to:', from);
+        navigate(from, { replace: true });
+        return;
+      }
+
+      // 生产环境实际API调用
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(values),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '登录失败');
+      }
+
+      const data = await response.json();
+      
+      // 保存token
+      storage.set(STORAGE_KEYS.TOKEN, data.token);
+      
+      // 更新认证状态
+      await login(data.user);
+      
+      // 跳转到之前的页面或聊天页面
+      const from = location.state?.from?.pathname || '/chat';
+      navigate(from, { replace: true });
+      
     } catch (error) {
       setSubmitError(error.message || '登录失败，请检查邮箱和密码是否正确');
     } finally {
