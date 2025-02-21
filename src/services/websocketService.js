@@ -12,9 +12,7 @@ class WebSocketService {
     this.heartbeatInterval = null;
     this.lastPingTime = null;
     this.isProduction = process.env.NODE_ENV === 'production';
-    this.baseUrl = this.isProduction 
-      ? 'wss://api.your-domain.com/ws'
-      : 'ws://localhost:3000/ws';
+    this.baseUrl = process.env.REACT_APP_WS_URL || 'wss://your-api-domain.vercel.app/ws';
   }
 
   connect() {

@@ -1,96 +1,74 @@
 import { API_CONFIG } from '../config/api';
+import apiClient from './apiService';
 
 // 创建微信支付订单
-export const createWechatPayOrder = async (amount, orderId) => {
+export const createWechatPayment = async (amount, description) => {
   try {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/payment/wechat/create`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${API_CONFIG.API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        amount,
-        orderId,
-        notifyUrl: `${window.location.origin}/payment/wechat/notify`
-      })
+    const response = await apiClient.post('/api/payment/wechat/create', {
+      amount,
+      description
     });
-
-    if (!response.ok) {
-      throw new Error('创建微信支付订单失败');
-    }
-
-    const data = await response.json();
-    return {
-      codeUrl: data.codeUrl,  // 二维码链接
-      orderId: data.orderId,
-      amount: data.amount
-    };
+    
+    return response.data;
   } catch (error) {
-    console.error('微信支付订单创建失败:', error);
+    console.error('创建微信支付订单失败:', error);
     throw error;
   }
 };
 
 // 创建支付宝支付订单
-export const createAlipayOrder = async (amount, orderId) => {
+export const createAlipayPayment = async (amount, description) => {
   try {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/payment/alipay/create`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${API_CONFIG.API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        amount,
-        orderId,
-        notifyUrl: `${window.location.origin}/payment/alipay/notify`,
-        returnUrl: `${window.location.origin}/payment/alipay/return`
-      })
+    const response = await apiClient.post('/api/payment/alipay/create', {
+      amount,
+      description
     });
-
-    if (!response.ok) {
-      throw new Error('创建支付宝支付订单失败');
-    }
-
-    const data = await response.json();
-    return {
-      payUrl: data.payUrl,  // 支付宝支付链接
-      orderId: data.orderId,
-      amount: data.amount
-    };
+    
+    return response.data;
   } catch (error) {
-    console.error('支付宝支付订单创建失败:', error);
+    console.error('创建支付宝订单失败:', error);
     throw error;
   }
 };
 
 // 查询支付状态
-export const checkPaymentStatus = async (orderId, paymentMethod) => {
+export const checkPaymentStatus = async (orderId) => {
   try {
-    const response = await fetch(
-      `${API_CONFIG.BASE_URL}/payment/${paymentMethod}/query/${orderId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${API_CONFIG.API_KEY}`
-        }
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error('查询支付状态失败');
-    }
-
-    const data = await response.json();
-    return {
-      status: data.status,  // success, pending, failed
-      paidAmount: data.paidAmount,
-      paidTime: data.paidTime
-    };
+    const response = await apiClient.get(`/api/payment/status/${orderId}`);
+    return response.data;
   } catch (error) {
-    console.error('查询支付状态失败:', error);
+    console.error('检查支付状态失败:', error);
     throw error;
   }
+};
+
+// 获取支付历史
+export const getPaymentHistory = async (params) => {
+  try {
+    const response = await apiClient.get('/api/payment/history', { params });
+    return response.data;
+  } catch (error) {
+    console.error('获取支付历史失败:', error);
+    throw error;
+  }
+};
+
+// 轮询支付状态
+export const pollPaymentStatus = (orderId, callback, interval = 3000) => {
+  const timer = setInterval(async () => {
+    try {
+      const status = await checkPaymentStatus(orderId);
+      if (status.paid) {
+        clearInterval(timer);
+        callback(null, status);
+      }
+    } catch (error) {
+      clearInterval(timer);
+      callback(error);
+    }
+  }, interval);
+
+  return () => clearInterval(timer);
 };
 
 // 生成订单号
