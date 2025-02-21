@@ -186,32 +186,72 @@ const ChatPage = () => {
   }, []);
 
   const handleSendMessage = async (message) => {
-    try {
-      // 发送消息到WebSocket服务器
-      websocketService.sendMessage({
-        type: 'message',
-        content: message
-      });
+    if (!message.trim()) return;
 
-      // 更新本地消息列表
-      setMessages(prevMessages => [...prevMessages, {
+    try {
+      setIsLoading(true);
+      setError('');
+      setShowPrompts(false);
+
+      // 添加用户消息到消息列表
+      const userMessage = {
         id: Date.now(),
         role: 'user',
-        content: message
-      }]);
+        content: message,
+        sender: 'user'
+      };
+      setMessages(prev => [...prev, userMessage]);
+
+      // 检查余额是否足够
+      const estimatedCost = calculateMessageCost(message, selectedModel);
+      const hasSufficientBalance = await checkBalanceSufficient(estimatedCost);
+      
+      if (!hasSufficientBalance) {
+        setError('余额不足，请充值后继续使用');
+        setShowRechargeModal(true);
+        return;
+      }
 
       // 调用AI服务
-      const response = await sendMessageToAI(message);
+      const response = await sendMessageToAI(message, selectedModel.id, messages);
       
-      // 更新本地消息列表
-      setMessages(prevMessages => [...prevMessages, {
-        id: Date.now(),
+      // 添加AI响应到消息列表
+      const aiMessage = {
+        id: Date.now() + 1,
         role: 'assistant',
-        content: response.content
-      }]);
+        content: response.text,
+        sender: 'ai',
+        model: selectedModel.name
+      };
+      setMessages(prev => [...prev, aiMessage]);
+
+      // 更新使用统计
+      if (response.usage) {
+        await updateUsageStats(response.usage);
+        const newUsageStats = await getUsageStats();
+        setUsage(newUsageStats);
+      }
+
+      // 保存对话
+      await saveCurrentChat();
+
     } catch (error) {
-      console.error('Error sending message:', error);
-      // 处理错误...
+      console.error('发送消息失败:', error);
+      setError(error.message || '发送消息失败，请重试');
+      
+      // 添加错误消息到消息列表
+      const errorMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: `发生错误: ${error.message || '请求失败，请重试'}`,
+        sender: 'ai',
+        isError: true
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      
+    } finally {
+      setIsLoading(false);
+      setInputMessage('');
     }
   };
 

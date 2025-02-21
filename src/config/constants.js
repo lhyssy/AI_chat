@@ -7,9 +7,15 @@ export const ENV = {
 
 // API配置
 export const API = {
-  BASE_URL: process.env.REACT_APP_API_BASE_URL,
+  BASE_URL: process.env.REACT_APP_API_BASE_URL || 'https://api.siliconflow.com/v1',
   API_KEY: process.env.REACT_APP_API_KEY,
-  TIMEOUT: 30000
+  TIMEOUT: 30000,
+  RETRY_TIMES: 3,
+  RETRY_DELAY: 1000,
+  HEADERS: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  }
 };
 
 // 模型配置

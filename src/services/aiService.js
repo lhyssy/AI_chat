@@ -34,10 +34,19 @@ const sendSingleRequest = async (requestBody, controller) => {
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${API_CONFIG.API_KEY}`,
+      'Accept': 'application/json',
       'Accept-Encoding': 'gzip, deflate, br',
       'Connection': 'keep-alive'
     },
-    body: JSON.stringify(requestBody),
+    body: JSON.stringify({
+      ...requestBody,
+      stream: false,
+      temperature: 0.7,
+      max_tokens: 2000,
+      top_p: 1,
+      frequency_penalty: 0,
+      presence_penalty: 0
+    }),
     signal: controller.signal,
     cache: 'no-cache',
     keepalive: true,
@@ -45,11 +54,26 @@ const sendSingleRequest = async (requestBody, controller) => {
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.message || `请求失败 (${response.status})`);
+    let errorMessage = '请求失败';
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.error?.message || errorData.message || `请求失败 (${response.status})`;
+    } catch (e) {
+      errorMessage = `请求失败 (${response.status})`;
+    }
+    throw new Error(errorMessage);
   }
 
-  return response.json();
+  const data = await response.json();
+  if (!data.choices?.[0]?.message?.content) {
+    throw new Error('AI 响应格式无效');
+  }
+
+  return {
+    text: data.choices[0].message.content,
+    usage: data.usage,
+    model: requestBody.model
+  };
 };
 
 export const sendMessageToAI = async (message, modelId, messageHistory = []) => {
@@ -168,7 +192,7 @@ export const sendMessageToAI = async (message, modelId, messageHistory = []) => 
           }
 
           // 处理响应内容
-          const responseText = data.choices[0].message.content;
+          const responseText = data.text;
           const response = {
             text: responseText,
             model: modelId,

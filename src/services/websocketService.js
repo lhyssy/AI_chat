@@ -7,13 +7,14 @@ class WebSocketService {
     this.maxReconnectAttempts = 5;
     this.reconnectTimeout = null;
     this.messageHandlers = new Set();
+    this.isProduction = process.env.NODE_ENV === 'production';
   }
 
   connect() {
-    // 开发环境使用本地WebSocket服务器，生产环境使用实际的WebSocket服务器
-    const wsUrl = process.env.NODE_ENV === 'development'
-      ? 'wss://api.siliconflow.com/ws'  // 使用正式的WebSocket服务器
-      : `${API.BASE_URL.replace('http', 'ws')}/ws`;
+    // 根据环境使用不同的WebSocket服务器
+    const wsUrl = this.isProduction
+      ? `wss://${process.env.REACT_APP_API_BASE_URL.replace('https://', '')}/ws`
+      : 'ws://localhost:3001/ws';
 
     try {
       this.ws = new WebSocket(wsUrl);
@@ -21,6 +22,14 @@ class WebSocketService {
       this.ws.onopen = () => {
         console.log('WebSocket connected');
         this.reconnectAttempts = 0;
+        
+        // 发送认证信息
+        if (this.isProduction) {
+          this.ws.send(JSON.stringify({
+            type: 'auth',
+            token: localStorage.getItem('auth_token')
+          }));
+        }
       };
 
       this.ws.onclose = () => {
@@ -30,6 +39,10 @@ class WebSocketService {
 
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
+        if (this.isProduction) {
+          // 生产环境错误处理
+          this.handleProductionError(error);
+        }
       };
 
       this.ws.onmessage = (event) => {
@@ -43,6 +56,20 @@ class WebSocketService {
     } catch (error) {
       console.error('Error creating WebSocket connection:', error);
       this.handleReconnect();
+    }
+  }
+
+  handleProductionError(error) {
+    // 生产环境特定的错误处理
+    if (error.code === 'ECONNREFUSED') {
+      console.error('无法连接到WebSocket服务器');
+    } else if (error.code === 'ETIMEDOUT') {
+      console.error('WebSocket连接超时');
+    }
+    
+    // 可以添加错误上报逻辑
+    if (window.Sentry) {
+      window.Sentry.captureException(error);
     }
   }
 
@@ -75,9 +102,40 @@ class WebSocketService {
 
   sendMessage(message) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
+      const messageData = {
+        ...message,
+        timestamp: new Date().toISOString()
+      };
+      
+      if (this.isProduction) {
+        messageData.token = localStorage.getItem('auth_token');
+      }
+      
+      this.ws.send(JSON.stringify(messageData));
     } else {
       console.warn('WebSocket is not connected');
+      // 可以实现消息队列，等连接恢复后发送
+      this.queueMessage(message);
+    }
+  }
+
+  queueMessage(message) {
+    // 实现简单的消息队列
+    if (!this.messageQueue) {
+      this.messageQueue = [];
+    }
+    
+    if (this.messageQueue.length < 50) { // 限制队列大小
+      this.messageQueue.push(message);
+    }
+  }
+
+  processMessageQueue() {
+    if (this.messageQueue && this.messageQueue.length > 0) {
+      while (this.messageQueue.length > 0) {
+        const message = this.messageQueue.shift();
+        this.sendMessage(message);
+      }
     }
   }
 
@@ -91,6 +149,7 @@ class WebSocketService {
       this.reconnectTimeout = null;
     }
     this.messageHandlers.clear();
+    this.messageQueue = [];
   }
 }
 

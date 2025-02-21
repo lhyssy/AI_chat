@@ -21,7 +21,26 @@
     }
   ],
   "env": {
-    "REACT_APP_API_BASE_URL": "https://api.siliconflow.com/v1",
-    "REACT_APP_API_KEY": "sk-subzchucvlbjekmvaidkqgjotgfagmsompsmlfiwvvywofvi"
+    "NODE_ENV": "production",
+    "REACT_APP_API_BASE_URL": "@api_base_url",
+    "MONGODB_URI": "@mongodb_uri",
+    "JWT_SECRET": "@jwt_secret",
+    "REACT_APP_API_KEY": "@api_key",
+    "WEBSOCKET_URL": "@websocket_url"
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,PUT,DELETE,OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization" }
+      ]
+    }
+  ],
+  "build": {
+    "env": {
+      "NODE_ENV": "production"
+    }
   }
 } 
