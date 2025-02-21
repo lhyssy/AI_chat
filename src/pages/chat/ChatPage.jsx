@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AVAILABLE_MODELS, MODEL_CATEGORIES, SYSTEM_PROMPTS, EXPORT_FORMATS } from '../../config/api';
 import { sendMessageToAI } from '../../services/aiService';
 import { exportChat, generateShareLink, copyToClipboard, searchChatHistory } from '../../utils/chatUtils';
-import { getBalance, getUsageStats, createRechargeOrder, checkOrderStatus, calculateMessageCost, checkBalanceSufficient } from '../../services/billingService';
+import { getBalance, getUsageStats, createRechargeOrder, checkOrderStatus, calculateMessageCost, checkBalanceSufficient, updateUsageStats } from '../../services/billingService';
 import BillingCard from '../../components/billing/BillingCard';
 import RechargeModal from '../../components/billing/RechargeModal';
 import ChatHistory from '../../components/chat/ChatHistory';
@@ -179,7 +179,6 @@ const ChatPage = () => {
       }
     } catch (error) {
       console.warn('余额检查失败:', error);
-      // 继续发送消息,不阻止用户使用
     }
 
     setIsLoading(true);
@@ -202,12 +201,27 @@ const ChatPage = () => {
         throw new Error('AI 响应格式无效');
       }
 
+      // 更新使用统计
+      try {
+        await updateUsageStats(response.tokens);
+        const [balanceData, usageData] = await Promise.all([
+          getBalance(),
+          getUsageStats()
+        ]);
+        setBalance(balanceData);
+        setUsage(usageData);
+      } catch (err) {
+        console.error('更新使用统计失败:', err);
+      }
+
       const aiMessage = {
         id: Date.now(),
         content: response.text,
         sender: 'ai',
         model: selectedModel.id,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        tokens: response.tokens,
+        cost: response.cost
       };
 
       setMessages(prev => [...prev, aiMessage]);
@@ -281,46 +295,38 @@ const ChatPage = () => {
     setShowPrompts(true);
   };
 
-  // 处理对话选择
-  const handleSelectChat = (chatId) => {
-    loadChatHistory(chatId);
-  };
-
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* 侧边栏 */}
-      <div className={`w-80 flex flex-col ${showSidebar ? '' : 'hidden'}`}>
-        {/* 对话历史 */}
-        <div className="flex-1 overflow-hidden">
-          <ChatHistory
-            onSelectChat={handleSelectChat}
-            selectedChatId={currentChatId}
-            onNewChat={handleNewChat}
-          />
-        </div>
+    <div className="flex h-screen bg-gray-100">
+      {/* 左侧边栏 */}
+      <div className={`w-64 bg-white border-r border-gray-200 flex flex-col ${showSidebar ? '' : 'hidden'}`}>
+        <ChatHistory
+          onSelectChat={loadChatHistory}
+          selectedChatId={currentChatId}
+          onNewChat={handleNewChat}
+        />
       </div>
 
       {/* 主聊天区域 */}
-      <div className="flex-1 flex flex-col bg-white">
-        {/* 顶部工具栏 */}
-        <div className="h-16 border-b border-gray-200 flex items-center px-4 justify-between">
-          <button
-            onClick={() => setShowSidebar(prev => !prev)}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-
+      <div className="flex-1 flex flex-col">
+        {/* 顶部导航栏 */}
+        <div className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4">
+          <div className="flex items-center">
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              className="p-2 hover:bg-gray-100 rounded-lg"
+            >
+              <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <h1 className="ml-4 text-xl font-semibold text-gray-900">AI Chat</h1>
+          </div>
+          
           <div className="flex items-center space-x-4">
             <select
               value={selectedModel.id}
-              onChange={(e) => {
-                const model = AVAILABLE_MODELS.find(m => m.id === e.target.value);
-                setSelectedModel(model);
-              }}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              onChange={handleModelChange}
+              className="form-select rounded-lg border-gray-300 text-sm"
             >
               {AVAILABLE_MODELS.map(model => (
                 <option key={model.id} value={model.id}>
@@ -328,80 +334,50 @@ const ChatPage = () => {
                 </option>
               ))}
             </select>
-
-            {currentChatId && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    const chat = getChat(currentChatId);
-                    if (chat) {
-                      const blob = new Blob([JSON.stringify(chat, null, 2)], { type: 'application/json' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `chat_${chat.title}_${new Date().toISOString()}.json`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
-                    }
-                  }}
-                  className="p-2 hover:bg-gray-100 rounded-lg text-gray-600"
-                  title="导出对话"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => {
-                    const chat = getChat(currentChatId);
-                    if (chat) {
-                      const url = `${window.location.origin}/chat/share/${chat.id}`;
-                      navigator.clipboard.writeText(url).then(() => {
-                        alert('分享链接已复制到剪贴板');
-                      });
-                    }
-                  }}
-                  className="p-2 hover:bg-gray-100 rounded-lg text-gray-600"
-                  title="分享对话"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                  </svg>
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
-        {/* 消息列表 */}
-        <ChatMessages
-          showPrompts={showPrompts}
-          messages={messages}
-          isLoading={isLoading}
-          onQuickPrompt={handleQuickPrompt}
-          quickPrompts={quickPrompts}
-          messagesEndRef={messagesEndRef}
-        />
+        {/* 聊天内容区域 */}
+        <div className="flex-1 flex">
+          {/* 聊天消息区域 */}
+          <div className="flex-1 flex flex-col">
+            <ChatMessages
+              showPrompts={showPrompts}
+              messages={messages}
+              isLoading={isLoading}
+              onQuickPrompt={handleQuickPrompt}
+              quickPrompts={quickPrompts}
+              messagesEndRef={messagesEndRef}
+            />
+            <ChatInput
+              inputMessage={inputMessage}
+              onInputChange={setInputMessage}
+              onSendMessage={handleSendMessage}
+              isLoading={isLoading}
+              showFileUpload={showFileUpload}
+              onToggleFileUpload={() => setShowFileUpload(!showFileUpload)}
+              onFileSelect={handleFileSelect}
+              onFileError={handleFileError}
+              uploadError={uploadError}
+              isDragging={isDragging}
+              onResizeMouseDown={handleResizeMouseDown}
+            />
+          </div>
 
-        {/* 输入区域 */}
-        <ChatInput
-          inputMessage={inputMessage}
-          onInputChange={setInputMessage}
-          onSendMessage={handleSendMessage}
-          isLoading={isLoading}
-        />
+          {/* 右侧账单信息 */}
+          <div className="w-80 border-l border-gray-200 bg-white p-4 overflow-y-auto">
+            <BillingCard />
+          </div>
+        </div>
       </div>
 
       {/* 充值模态框 */}
       <RechargeModal
         isOpen={showRechargeModal}
         onClose={() => setShowRechargeModal(false)}
-        onRecharge={handleRecharge}
       />
     </div>
   );
 };
 
-export default React.memo(ChatPage);
+export default ChatPage;

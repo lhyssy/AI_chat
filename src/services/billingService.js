@@ -144,4 +144,29 @@ export const checkBalanceSufficient = async (estimatedCost) => {
     console.error('检查余额错误:', error);
     throw error;
   }
+};
+
+// 更新使用统计
+export const updateUsageStats = async (tokenUsage) => {
+  // 开发环境下直接返回成功
+  if (process.env.NODE_ENV === 'development') {
+    return { success: true };
+  }
+
+  try {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/billing/usage/update`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${API_CONFIG.API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ tokenUsage })
+    });
+    
+    if (!response.ok) throw new Error('更新使用统计失败');
+    return await response.json();
+  } catch (error) {
+    console.error('更新使用统计错误:', error);
+    throw error;
+  }
 }; 
