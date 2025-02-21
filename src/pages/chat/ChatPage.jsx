@@ -212,14 +212,36 @@ const ChatPage = () => {
         return;
       }
 
-      // 调用AI服务
-      const response = await sendMessageToAI(message, selectedModel.id, messages);
-      
+      // 通过WebSocket发送消息
+      websocketService.sendMessage({
+        type: 'chat',
+        content: message,
+        modelId: selectedModel.id,
+        messageHistory: messages.slice(-10) // 只发送最近10条消息作为上下文
+      });
+
+      // 等待AI响应
+      const response = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('请求超时，请重试'));
+        }, 30000); // 30秒超时
+
+        const messageHandler = (data) => {
+          if (data.type === 'chat_response') {
+            clearTimeout(timeout);
+            websocketService.removeMessageHandler(messageHandler);
+            resolve(data);
+          }
+        };
+
+        websocketService.addMessageHandler(messageHandler);
+      });
+
       // 添加AI响应到消息列表
       const aiMessage = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: response.text,
+        content: response.content,
         sender: 'ai',
         model: selectedModel.name
       };
@@ -230,6 +252,10 @@ const ChatPage = () => {
         await updateUsageStats(response.usage);
         const newUsageStats = await getUsageStats();
         setUsage(newUsageStats);
+        
+        // 更新余额
+        const newBalance = await getBalance();
+        setBalance(newBalance);
       }
 
       // 保存对话

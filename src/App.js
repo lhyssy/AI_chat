@@ -1,71 +1,73 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ToastContainer } from 'react-toastify';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
-import ErrorBoundary from './components/ErrorBoundary';
-import PrivateRoute from './components/auth/PrivateRoute';
-import { ROUTES } from './config/constants';
-
-// 页面组件
+import { BillingProvider } from './contexts/BillingContext';
+import Navbar from './components/layout/Navbar';
+import ChatPage from './pages/chat/ChatPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
-import ChatPage from './pages/chat/ChatPage';
-import ProfilePage from './pages/auth/ProfilePage';
-import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
-
-// 样式
-import 'react-toastify/dist/ReactToastify.css';
+import ProfilePage from './pages/user/ProfilePage';
+import SettingsPage from './pages/user/SettingsPage';
+import RechargePage from './pages/billing/RechargePage';
+import PrivateRoute from './components/auth/PrivateRoute';
 import './index.css';
 
-const App = () => {
+function App() {
   return (
-    <ErrorBoundary>
+    <Router>
       <AuthProvider>
-        <Router>
-          <Routes>
-            {/* 根路径重定向到聊天页面 */}
-            <Route path="/" element={<Navigate to={ROUTES.CHAT} replace />} />
-            
-            {/* 公开路由 */}
-            <Route path={ROUTES.LOGIN} element={<LoginPage />} />
-            <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
-            <Route path={ROUTES.FORGOT_PASSWORD} element={<ForgotPasswordPage />} />
-            
-            {/* 受保护路由 */}
-            <Route
-              path={ROUTES.CHAT}
-              element={
-                <PrivateRoute>
-                  <ChatPage />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path={ROUTES.PROFILE}
-              element={
-                <PrivateRoute>
-                  <ProfilePage />
-                </PrivateRoute>
-              }
-            />
-          </Routes>
-          
-          <ToastContainer
-            position="top-right"
-            autoClose={3000}
-            hideProgressBar={false}
-            newestOnTop
-            closeOnClick
-            rtl={false}
-            pauseOnFocusLoss
-            draggable
-            pauseOnHover
-            theme="colored"
-          />
-        </Router>
+        <BillingProvider>
+          <div className="min-h-screen bg-gray-50">
+            <Navbar />
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route
+                path="/"
+                element={
+                  <PrivateRoute>
+                    <ChatPage />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/chat"
+                element={
+                  <PrivateRoute>
+                    <ChatPage />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <PrivateRoute>
+                    <ProfilePage />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <PrivateRoute>
+                    <SettingsPage />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/recharge"
+                element={
+                  <PrivateRoute>
+                    <RechargePage />
+                  </PrivateRoute>
+                }
+              />
+            </Routes>
+          </div>
+        </BillingProvider>
       </AuthProvider>
-    </ErrorBoundary>
+    </Router>
   );
-};
+}
 
 export default App;
