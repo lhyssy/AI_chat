@@ -1,86 +1,80 @@
 import React from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { useBilling } from '../../contexts/BillingContext';
+import { BILLING_CONFIG } from '../../config/api';
 
-const BillingCard = () => {
-  const { user } = useAuth();
-  const { balance, usage, loading, error } = useBilling();
+const BillingCard = ({ balance = 0, usage = null, onRecharge }) => {
+  // 设置默认值，避免空值
+  const defaultUsage = {
+    totalCost: 0,
+    conversationCount: 0,
+    modelUsage: {}
+  };
 
-  if (loading) {
-    return (
-      <div className="p-4">
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-          <div className="space-y-3 mt-4">
-            <div className="h-4 bg-gray-200 rounded"></div>
-            <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-4 text-red-500">
-        <p>加载账单信息失败</p>
-        <p className="text-sm">{error}</p>
-      </div>
-    );
-  }
+  // 合并默认值和实际值
+  const safeUsage = usage ? {
+    ...defaultUsage,
+    ...usage
+  } : defaultUsage;
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="text-center">
-        <h3 className="text-lg font-medium text-gray-900">账户余额</h3>
-        <p className="mt-1 text-3xl font-bold text-purple-600">
-          ¥{balance?.amount?.toFixed(2) || '0.00'}
-        </p>
+    <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">账户余额</h3>
+          <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600">
+            ¥{balance.toFixed(2)}
+          </p>
+        </div>
+        <button
+          onClick={onRecharge}
+          className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:shadow-lg transition-all duration-300 text-sm font-medium"
+        >
+          充值
+        </button>
       </div>
 
-      <div className="border-t border-gray-200 pt-4">
-        <h4 className="text-sm font-medium text-gray-500">本月使用情况</h4>
-        <dl className="mt-2 space-y-3">
-          <div className="flex justify-between">
-            <dt className="text-sm text-gray-500">消费金额</dt>
-            <dd className="text-sm font-medium text-gray-900">
-              ¥{usage?.monthlySpending?.toFixed(2) || '0.00'}
-            </dd>
+      <div className="space-y-4">
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">本月使用情况</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-500 mb-1">消费金额</p>
+              <p className="text-lg font-semibold text-gray-900">
+                ¥{safeUsage.totalCost.toFixed(2)}
+              </p>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-500 mb-1">对话次数</p>
+              <p className="text-lg font-semibold text-gray-900">
+                {safeUsage.conversationCount}
+              </p>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <dt className="text-sm text-gray-500">对话次数</dt>
-            <dd className="text-sm font-medium text-gray-900">
-              {usage?.monthlyChats || 0}
-            </dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-sm text-gray-500">总字数</dt>
-            <dd className="text-sm font-medium text-gray-900">
-              {usage?.monthlyTokens?.toLocaleString() || 0}
-            </dd>
-          </div>
-        </dl>
-      </div>
+        </div>
 
-      <button
-        onClick={() => window.location.href = '/recharge'}
-        className="w-full px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-      >
-        充值
-      </button>
-
-      <div className="mt-4 text-xs text-gray-500">
-        <p>当前费率：</p>
-        <ul className="mt-1 space-y-1">
-          {Object.entries(balance?.rates || {}).map(([model, rate]) => (
-            <li key={model}>
-              {model}: ¥{rate}/1K tokens
-            </li>
-          ))}
-        </ul>
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">模型使用明细</h4>
+          <div className="space-y-2">
+            {Object.entries(safeUsage.modelUsage).map(([modelId, tokens]) => {
+              const model = BILLING_CONFIG[modelId];
+              if (!model) return null;
+              
+              const cost = (tokens * model.pricePerToken / 1000).toFixed(2);
+              
+              return (
+                <div key={modelId} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">{model.name}</p>
+                    <p className="text-xs text-gray-500">{tokens.toLocaleString()} tokens</p>
+                  </div>
+                  <p className="text-sm font-medium text-gray-900">¥{cost}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-export default BillingCard; 
+export default React.memo(BillingCard); 

@@ -164,74 +164,15 @@ const ChatPage = () => {
     // 连接WebSocket
     websocketService.connect();
 
-    // 添加WebSocket事件监听
-    const handleWebSocketEvent = (event) => {
-      const { type, ...data } = event.detail;
-      switch (type) {
-        case 'max_reconnect_attempts':
-          setError('连接服务器失败，请刷新页面重试');
-          break;
-        case 'error':
-          setError(data.message || '连接错误');
-          break;
-        case 'authenticated':
-          console.log('WebSocket认证成功');
-          break;
-        default:
-          break;
-      }
-    };
-
-    window.addEventListener('websocket_event', handleWebSocketEvent);
-
     // 添加消息处理器
     const handleWebSocketMessage = (data) => {
-      switch (data.type) {
-        case 'chat_response':
-          // 处理AI响应
-          const aiMessage = {
-            id: Date.now(),
-            role: 'assistant',
-            content: data.content,
-            sender: 'ai',
-            model: selectedModel.name,
-            status: 'delivered'
-          };
-          setMessages(prev => [...prev, aiMessage]);
-          setIsLoading(false);
-
-          // 更新使用统计
-          if (data.usage) {
-            updateUsageStats(data.usage).then(() => {
-              // 刷新账单信息
-              getBalance().then(setBalance);
-              getUsageStats().then(setUsage);
-            });
-          }
-          break;
-
-        case 'error':
-          setError(data.message || '发送消息失败');
-          setIsLoading(false);
-          break;
-
-        case 'typing':
-          // 添加打字动画效果
-          const typingMessage = {
-            id: 'typing',
-            role: 'assistant',
-            content: '正在思考...',
-            sender: 'ai',
-            status: 'typing'
-          };
-          setMessages(prev => {
-            const filtered = prev.filter(m => m.id !== 'typing');
-            return [...filtered, typingMessage];
-          });
-          break;
-
-        default:
-          break;
+      if (data.type === 'message') {
+        // 处理接收到的消息
+        setMessages(prevMessages => [...prevMessages, {
+          id: Date.now(),
+          role: 'assistant',
+          content: data.content
+        }]);
       }
     };
 
@@ -239,13 +180,12 @@ const ChatPage = () => {
 
     // 清理函数
     return () => {
-      window.removeEventListener('websocket_event', handleWebSocketEvent);
       websocketService.removeMessageHandler(handleWebSocketMessage);
       websocketService.disconnect();
     };
-  }, [selectedModel]);
+  }, []);
 
-  const handleSendMessage = useCallback(async (message) => {
+  const handleSendMessage = async (message) => {
     if (!message.trim()) return;
 
     try {
@@ -258,8 +198,7 @@ const ChatPage = () => {
         id: Date.now(),
         role: 'user',
         content: message,
-        sender: 'user',
-        status: 'sending'
+        sender: 'user'
       };
       setMessages(prev => [...prev, userMessage]);
 
@@ -270,38 +209,27 @@ const ChatPage = () => {
       if (!hasSufficientBalance) {
         setError('余额不足，请充值后继续使用');
         setShowRechargeModal(true);
-        // 更新消息状态为错误
-        setMessages(prev => prev.map(msg => 
-          msg.id === userMessage.id 
-            ? { ...msg, status: 'error', error: '余额不足' }
-            : msg
-        ));
         return;
       }
 
-      // 通过WebSocket发送消息
-      const success = websocketService.sendMessage({
-        type: 'chat',
-        content: message,
-        modelId: selectedModel.id,
-        messageHistory: messages.slice(-10) // 只发送最近10条消息作为上下文
-      });
+      // 调用AI服务
+      const response = await sendMessageToAI(message, selectedModel.id, messages);
+      
+      // 添加AI响应到消息列表
+      const aiMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: response.text,
+        sender: 'ai',
+        model: selectedModel.name
+      };
+      setMessages(prev => [...prev, aiMessage]);
 
-      if (!success) {
-        setError('发送消息失败，正在重试...');
-        // 更新消息状态为错误
-        setMessages(prev => prev.map(msg => 
-          msg.id === userMessage.id 
-            ? { ...msg, status: 'error', error: '发送失败' }
-            : msg
-        ));
-      } else {
-        // 更新消息状态为已发送
-        setMessages(prev => prev.map(msg => 
-          msg.id === userMessage.id 
-            ? { ...msg, status: 'sent' }
-            : msg
-        ));
+      // 更新使用统计
+      if (response.usage) {
+        await updateUsageStats(response.usage);
+        const newUsageStats = await getUsageStats();
+        setUsage(newUsageStats);
       }
 
       // 保存对话
@@ -310,16 +238,22 @@ const ChatPage = () => {
     } catch (error) {
       console.error('发送消息失败:', error);
       setError(error.message || '发送消息失败，请重试');
-      // 更新消息状态为错误
-      setMessages(prev => prev.map(msg => 
-        msg.sender === 'user' && msg.status === 'sending'
-          ? { ...msg, status: 'error', error: error.message }
-          : msg
-      ));
+      
+      // 添加错误消息到消息列表
+      const errorMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: `发生错误: ${error.message || '请求失败，请重试'}`,
+        sender: 'ai',
+        isError: true
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      
     } finally {
+      setIsLoading(false);
       setInputMessage('');
     }
-  }, [messages, selectedModel, saveCurrentChat]);
+  };
 
   const handleQuickPrompt = useCallback((prompt) => {
     setInputMessage(prompt.title);
