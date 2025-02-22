@@ -11,8 +11,7 @@ class WebSocketService {
     this.reconnectInterval = 3000;
     this.heartbeatInterval = null;
     this.lastPingTime = null;
-    this.isProduction = process.env.NODE_ENV === 'production';
-    this.baseUrl = process.env.REACT_APP_WS_URL || 'wss://your-api-domain.vercel.app/ws';
+    this.baseUrl = process.env.REACT_APP_WS_URL;
   }
 
   connect() {
@@ -25,6 +24,7 @@ class WebSocketService {
     const url = `${this.baseUrl}?token=${token}`;
 
     try {
+      console.log('正在连接WebSocket...', url);
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
@@ -33,18 +33,29 @@ class WebSocketService {
         this.reconnectAttempts = 0;
         this.startHeartbeat();
         this.processMessageQueue();
+        
+        // 连接成功后立即发送认证消息
+        this.sendMessage({
+          type: 'auth',
+          token: token
+        });
       };
 
       this.ws.onclose = (event) => {
         console.log('WebSocket连接已关闭:', event.code, event.reason);
         this.isConnecting = false;
         this.stopHeartbeat();
-        this.handleReconnect();
+        
+        // 非主动关闭的情况下，尝试重连
+        if (event.code !== 1000) {
+          this.handleReconnect();
+        }
       };
 
       this.ws.onerror = (error) => {
         console.error('WebSocket错误:', error);
         this.isConnecting = false;
+        this.dispatchEvent('error', { message: '连接服务器失败' });
       };
 
       this.ws.onmessage = (event) => {
@@ -54,6 +65,19 @@ class WebSocketService {
           // 处理心跳响应
           if (data.type === 'pong') {
             this.lastPingTime = Date.now();
+            return;
+          }
+
+          // 处理认证响应
+          if (data.type === 'auth') {
+            if (data.status === 'success') {
+              console.log('WebSocket认证成功');
+              this.dispatchEvent('authenticated');
+            } else {
+              console.error('WebSocket认证失败:', data.message);
+              this.disconnect();
+              window.location.href = '/login';
+            }
             return;
           }
 
@@ -142,12 +166,9 @@ class WebSocketService {
     if (this.ws?.readyState === WebSocket.OPEN) {
       const messageData = {
         ...message,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        token: localStorage.getItem('auth_token')
       };
-      
-      if (this.isProduction) {
-        messageData.token = localStorage.getItem('auth_token');
-      }
       
       try {
         this.ws.send(JSON.stringify(messageData));

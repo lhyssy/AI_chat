@@ -171,6 +171,12 @@ const ChatPage = () => {
         case 'max_reconnect_attempts':
           setError('连接服务器失败，请刷新页面重试');
           break;
+        case 'error':
+          setError(data.message || '连接错误');
+          break;
+        case 'authenticated':
+          console.log('WebSocket认证成功');
+          break;
         default:
           break;
       }
@@ -188,9 +194,11 @@ const ChatPage = () => {
             role: 'assistant',
             content: data.content,
             sender: 'ai',
-            model: selectedModel.name
+            model: selectedModel.name,
+            status: 'delivered'
           };
           setMessages(prev => [...prev, aiMessage]);
+          setIsLoading(false);
 
           // 更新使用统计
           if (data.usage) {
@@ -204,10 +212,25 @@ const ChatPage = () => {
 
         case 'error':
           setError(data.message || '发送消息失败');
+          setIsLoading(false);
           break;
 
         case 'typing':
-          // 可以添加打字动画效果
+          // 添加打字动画效果
+          const typingMessage = {
+            id: 'typing',
+            role: 'assistant',
+            content: '正在思考...',
+            sender: 'ai',
+            status: 'typing'
+          };
+          setMessages(prev => {
+            const filtered = prev.filter(m => m.id !== 'typing');
+            return [...filtered, typingMessage];
+          });
+          break;
+
+        default:
           break;
       }
     };
@@ -235,7 +258,8 @@ const ChatPage = () => {
         id: Date.now(),
         role: 'user',
         content: message,
-        sender: 'user'
+        sender: 'user',
+        status: 'sending'
       };
       setMessages(prev => [...prev, userMessage]);
 
@@ -246,6 +270,12 @@ const ChatPage = () => {
       if (!hasSufficientBalance) {
         setError('余额不足，请充值后继续使用');
         setShowRechargeModal(true);
+        // 更新消息状态为错误
+        setMessages(prev => prev.map(msg => 
+          msg.id === userMessage.id 
+            ? { ...msg, status: 'error', error: '余额不足' }
+            : msg
+        ));
         return;
       }
 
@@ -259,6 +289,19 @@ const ChatPage = () => {
 
       if (!success) {
         setError('发送消息失败，正在重试...');
+        // 更新消息状态为错误
+        setMessages(prev => prev.map(msg => 
+          msg.id === userMessage.id 
+            ? { ...msg, status: 'error', error: '发送失败' }
+            : msg
+        ));
+      } else {
+        // 更新消息状态为已发送
+        setMessages(prev => prev.map(msg => 
+          msg.id === userMessage.id 
+            ? { ...msg, status: 'sent' }
+            : msg
+        ));
       }
 
       // 保存对话
@@ -267,8 +310,13 @@ const ChatPage = () => {
     } catch (error) {
       console.error('发送消息失败:', error);
       setError(error.message || '发送消息失败，请重试');
+      // 更新消息状态为错误
+      setMessages(prev => prev.map(msg => 
+        msg.sender === 'user' && msg.status === 'sending'
+          ? { ...msg, status: 'error', error: error.message }
+          : msg
+      ));
     } finally {
-      setIsLoading(false);
       setInputMessage('');
     }
   }, [messages, selectedModel, saveCurrentChat]);
