@@ -33,12 +33,6 @@ class WebSocketService {
         this.reconnectAttempts = 0;
         this.startHeartbeat();
         this.processMessageQueue();
-        
-        // 连接成功后立即发送认证消息
-        this.sendMessage({
-          type: 'auth',
-          token: token
-        });
       };
 
       this.ws.onclose = (event) => {
@@ -46,7 +40,6 @@ class WebSocketService {
         this.isConnecting = false;
         this.stopHeartbeat();
         
-        // 非主动关闭的情况下，尝试重连
         if (event.code !== 1000) {
           this.handleReconnect();
         }
@@ -55,33 +48,17 @@ class WebSocketService {
       this.ws.onerror = (error) => {
         console.error('WebSocket错误:', error);
         this.isConnecting = false;
-        this.dispatchEvent('error', { message: '连接服务器失败' });
       };
 
       this.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           
-          // 处理心跳响应
           if (data.type === 'pong') {
             this.lastPingTime = Date.now();
             return;
           }
 
-          // 处理认证响应
-          if (data.type === 'auth') {
-            if (data.status === 'success') {
-              console.log('WebSocket认证成功');
-              this.dispatchEvent('authenticated');
-            } else {
-              console.error('WebSocket认证失败:', data.message);
-              this.disconnect();
-              window.location.href = '/login';
-            }
-            return;
-          }
-
-          // 处理普通消息
           this.messageHandlers.forEach(handler => {
             try {
               handler(data);
@@ -103,7 +80,6 @@ class WebSocketService {
   handleReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('重连次数超过最大限制');
-      this.dispatchEvent('max_reconnect_attempts');
       return;
     }
 
@@ -120,7 +96,6 @@ class WebSocketService {
     
     this.heartbeatInterval = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
-        // 检查上次心跳是否超时
         const now = Date.now();
         if (this.lastPingTime && (now - this.lastPingTime > 10000)) {
           console.warn('心跳超时，重新连接');
@@ -128,7 +103,6 @@ class WebSocketService {
           return;
         }
 
-        // 发送心跳
         this.sendMessage({ type: 'ping' });
       }
     }, 5000);
@@ -164,18 +138,12 @@ class WebSocketService {
 
   sendMessage(message) {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      const messageData = {
-        ...message,
-        timestamp: new Date().toISOString(),
-        token: localStorage.getItem('auth_token')
-      };
-      
       try {
-        this.ws.send(JSON.stringify(messageData));
+        this.ws.send(JSON.stringify(message));
         return true;
       } catch (error) {
         console.error('发送消息失败:', error);
-        this.queueMessage(messageData);
+        this.queueMessage(message);
         return false;
       }
     } else {
@@ -219,17 +187,6 @@ class WebSocketService {
       return true; // 发送失败，保留在队列中
     });
   }
-
-  dispatchEvent(eventName, data = {}) {
-    const event = new CustomEvent('websocket_event', {
-      detail: {
-        type: eventName,
-        ...data
-      }
-    });
-    window.dispatchEvent(event);
-  }
 }
 
-// 创建单例实例
 export const websocketService = new WebSocketService(); 
