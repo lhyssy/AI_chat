@@ -222,7 +222,7 @@ const ChatPage = () => {
     };
   }, [selectedModel]);
 
-  const handleSendMessage = async (message) => {
+  const handleSendMessage = useCallback(async (message) => {
     if (!message.trim()) return;
 
     try {
@@ -271,7 +271,7 @@ const ChatPage = () => {
       setIsLoading(false);
       setInputMessage('');
     }
-  };
+  }, [messages, selectedModel, saveCurrentChat]);
 
   const handleQuickPrompt = useCallback((prompt) => {
     setInputMessage(prompt.title);
