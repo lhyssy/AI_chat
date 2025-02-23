@@ -1,4 +1,4 @@
-import { API_CONFIG, BILLING_CONFIG } from '../config/api';
+import { API_CONFIG, BILLING_CONFIG } from '../../config/api';
 
 // 计算token数量
 const countTokens = (text) => {
@@ -26,11 +26,6 @@ const calculateCost = (modelId, inputTokens, outputTokens) => {
 
 // 查询账户余额
 export const getBalance = async () => {
-  // 开发环境下返回测试数据
-  if (process.env.NODE_ENV === 'development') {
-    return 10000; // 返回 10000 元测试余额
-  }
-
   try {
     const response = await fetch(`${API_CONFIG.BASE_URL}/billing/balance`, {
       headers: {
@@ -49,19 +44,6 @@ export const getBalance = async () => {
 
 // 查询使用统计
 export const getUsageStats = async (startDate, endDate) => {
-  // 开发环境下返回测试数据
-  if (process.env.NODE_ENV === 'development') {
-    return {
-      totalCost: 50,
-      conversationCount: 100,
-      modelUsage: {
-        'gpt-3.5-turbo': 5000,
-        'gpt-4': 2000,
-        'claude-2': 1000
-      }
-    };
-  }
-
   try {
     const response = await fetch(
       `${API_CONFIG.BASE_URL}/billing/usage?start=${startDate}&end=${endDate}`,
@@ -100,26 +82,6 @@ export const createRechargeOrder = async (amount, paymentMethod) => {
   }
 };
 
-// 查询订单状态
-export const checkOrderStatus = async (orderId) => {
-  try {
-    const response = await fetch(
-      `${API_CONFIG.BASE_URL}/billing/order/${orderId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${API_CONFIG.API_KEY}`
-        }
-      }
-    );
-    
-    if (!response.ok) throw new Error('查询订单状态失败');
-    return await response.json();
-  } catch (error) {
-    console.error('查询订单状态错误:', error);
-    throw error;
-  }
-};
-
 // 计算本次对话费用
 export const calculateMessageCost = (message, model) => {
   if (!message || !model) return 0;
@@ -132,11 +94,6 @@ export const calculateMessageCost = (message, model) => {
 
 // 检查余额是否足够
 export const checkBalanceSufficient = async (estimatedCost) => {
-  // 开发环境下始终返回 true
-  if (process.env.NODE_ENV === 'development') {
-    return true;
-  }
-
   try {
     const balance = await getBalance();
     return balance >= estimatedCost;
@@ -148,11 +105,6 @@ export const checkBalanceSufficient = async (estimatedCost) => {
 
 // 更新使用统计
 export const updateUsageStats = async (tokenUsage) => {
-  // 开发环境下直接返回成功
-  if (process.env.NODE_ENV === 'development') {
-    return { success: true };
-  }
-
   try {
     const response = await fetch(`${API_CONFIG.BASE_URL}/billing/usage/update`, {
       method: 'POST',
