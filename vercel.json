@@ -1,7 +1,14 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "outputDirectory": "build",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build"
+      }
+    }
+  ],
   "routes": [
     {
       "src": "/static/(.*)",
@@ -16,31 +23,16 @@
       "dest": "/manifest.json"
     },
     {
+      "src": "/robots.txt",
+      "dest": "/robots.txt"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
   ],
   "env": {
-    "NODE_ENV": "production",
-    "REACT_APP_API_BASE_URL": "@api_base_url",
-    "MONGODB_URI": "@mongodb_uri",
-    "JWT_SECRET": "@jwt_secret",
-    "REACT_APP_API_KEY": "@api_key",
-    "WEBSOCKET_URL": "@websocket_url"
-  },
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,PUT,DELETE,OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization" }
-      ]
-    }
-  ],
-  "build": {
-    "env": {
-      "NODE_ENV": "production"
-    }
+    "REACT_APP_SILICONFLOW_API_KEY": "@siliconflow_api_key",
+    "REACT_APP_SILICONFLOW_BASE_URL": "https://api.siliconflow.cn/v1"
   }
 } 
